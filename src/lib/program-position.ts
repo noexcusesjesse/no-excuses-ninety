@@ -305,6 +305,34 @@ export function blockLabel(block: ProgramBlock): string {
   }
 }
 
+export function isBeforeDay1(block: ProgramBlock): boolean {
+  return block === "before" || block === "basicTraining";
+}
+
+export type Day90InterviewStatus = "not_yet" | "upcoming" | "due";
+
+/**
+ * The Ninety ends on ninetyEndDate (first cohort: Nov 29 2026).
+ * Exit interview is due that day and after. Upcoming = last 7 days of The Ninety.
+ */
+export function day90InterviewStatus(
+  position: ProgramPosition,
+  upcomingWindowDays = 7,
+): Day90InterviewStatus {
+  if (position.asOf >= position.ninetyEndDate) return "due";
+  const daysLeft = diffDays(position.asOf, position.ninetyEndDate);
+  if (daysLeft <= upcomingWindowDays) return "upcoming";
+  return "not_yet";
+}
+
+export function formatMonthLabel(position: ProgramPosition): string {
+  if (position.block === "basicTraining") {
+    return `Runway ${position.dayInBlock}/${position.daysInBlock}`;
+  }
+  if (position.programMonth) return `Month ${position.programMonth} of ${TOTAL_MONTHS}`;
+  return blockLabel(position.block);
+}
+
 export function formatDateShort(iso: string): string {
   return parseISODate(iso).toLocaleDateString("en-US", {
     month: "short",

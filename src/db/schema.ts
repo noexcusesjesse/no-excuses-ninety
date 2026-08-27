@@ -3,6 +3,7 @@
  *
  * Tables:
  *   coaches       — accounts that own client rosters
+ *   staffs        — program ops (Jesse). Not a daily log. Can preview client/coach views.
  *   clients       — the people being coached (1 coach owns many)
  *   program_days  — The Ninety template (Day 1-90, A/B/rest, phase, deload)
  *   daily_checkins — one row per client per day: workout, walk, mood, energy, sleep, protein, hydration, fasting
@@ -22,6 +23,17 @@ import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 export const coaches = sqliteTable("coaches", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  name: text("name").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
+/** Program ops. Same shape as coaches. Staff is not a third daily-log role. */
+export const staffs = sqliteTable("staffs", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
@@ -168,7 +180,9 @@ export const auditLog = sqliteTable("audit_log", {
 });
 
 export type Coach = typeof coaches.$inferSelect;
-export type NewCoach = typeof coaches.$inferSelect;
+export type NewCoach = typeof coaches.$inferInsert;
+export type Staff = typeof staffs.$inferSelect;
+export type NewStaff = typeof staffs.$inferInsert;
 export type Client = typeof clients.$inferSelect;
 export type NewClient = typeof clients.$inferInsert;
 export type ProgramDay = typeof programDays.$inferSelect;

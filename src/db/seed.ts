@@ -1,13 +1,13 @@
 /**
- * Seed the DB with: 1 coach, 6 clients, The Ninety 1–90 template,
- * and daily check-ins per client.
+ * Seed the DB with: 1 staff (Jesse, ops), 1 coach, 6 clients, The Ninety 1–90
+ * template, and daily check-ins per client.
  *
  * First-cohort default: Marcus startDate = 2026-09-01 (Day 1 of The Ninety).
  * Basic Training is Aug 18–31. He is physician-cleared; 24h/36h still must not
  * appear until Month 7 / Month 8.
  *
  * Run: npm run db:seed (after npm run db:migrate)
- * Idempotent: existing coach with seed email skips seed.
+ * Idempotent: staff is seeded independently; existing coach email skips clients.
  */
 import { db, schema } from "./client";
 import { sql } from "drizzle-orm";
@@ -24,6 +24,8 @@ import {
 
 const COACH_EMAIL = "coach@loadlinefitness.com";
 const COACH_PASSWORD = "loadline-demo";
+const STAFF_EMAIL = "staff@loadlinefitness.com";
+const STAFF_PASSWORD = "staff-demo";
 
 const CLIENT_SEED: Array<{
   email: string;
@@ -54,11 +56,31 @@ function isoDaysAgo(days: number): string {
 }
 function weekOf(day: number): number { return Math.ceil(day / 7); }
 
+function seedStaffIfNeeded(): void {
+  const existingStaff = db.select().from(schema.staffs).where(sql`email = ${STAFF_EMAIL}`).get();
+  if (existingStaff) {
+    console.log(`Staff ${STAFF_EMAIL} already exists.`);
+    return;
+  }
+  const staffId = randomUUID();
+  db.insert(schema.staffs).values({
+    id: staffId,
+    email: STAFF_EMAIL,
+    passwordHash: hashSync(STAFF_PASSWORD, 10),
+    name: "Jesse Collins",
+  }).run();
+  console.log(`  + Staff: ${STAFF_EMAIL} / ${STAFF_PASSWORD}`);
+}
+
 export async function seedDatabase(): Promise<void> {
+  console.log("Seeding staff (program ops)...");
+  seedStaffIfNeeded();
+
   const existing = db.select().from(schema.coaches).where(sql`email = ${COACH_EMAIL}`).get();
   if (existing) {
-    console.log(`Coach ${COACH_EMAIL} already exists. Skipping seed.`);
+    console.log(`Coach ${COACH_EMAIL} already exists. Skipping coach/client seed.`);
     console.log(`(run 'npm run db:reset' to wipe + reseed)`);
+    console.log(`Staff login: ${STAFF_EMAIL} / ${STAFF_PASSWORD}`);
     return;
   }
 
@@ -154,7 +176,8 @@ export async function seedDatabase(): Promise<void> {
     console.log(`  + ${c.name}: start ${startDate}, ${checkinRows.length} check-ins, ${weightRows.length} weights`);
   }
   console.log("\nSeed complete.");
-  console.log(`Coach login: ${COACH_EMAIL} / ${COACH_PASSWORD}`);
+  console.log(`Staff login:  ${STAFF_EMAIL} / ${STAFF_PASSWORD}`);
+  console.log(`Coach login:  ${COACH_EMAIL} / ${COACH_PASSWORD}`);
   console.log(`Client logins: CLIENT_SEED emails / password "client-demo"`);
 }
 
