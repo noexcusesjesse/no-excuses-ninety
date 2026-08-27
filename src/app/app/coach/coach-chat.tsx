@@ -7,6 +7,7 @@ interface ContextData {
   name: string;
   programDay: number;
   phase: string;
+  block?: string;
   weekNumber: number;
   proteinToday: number;
   proteinTarget: number;

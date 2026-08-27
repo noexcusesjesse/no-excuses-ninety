@@ -11,6 +11,14 @@ import "server-only";
 import { db, schema } from "./client";
 import { and, eq, desc, gte } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
+import {
+  blockLabel,
+  currentMonthWindow,
+  getDayPlan,
+  getProgramPosition,
+  todayISODate,
+  type ProgramPosition,
+} from "@/lib/program-position";
 
 export type WorkoutLetter = "A" | "B" | "REST";
 
@@ -19,8 +27,9 @@ export interface ClientToday {
   name: string;
   programDay: number;
   weekNumber: number;
-  phase: "Foundation" | "Build" | "Identity";
+  phase: string;
   startDate: string;
+  position: ProgramPosition;
   plan: {
     date: string;
     dayLabel: string;
@@ -53,19 +62,13 @@ export async function getClientToday(): Promise<ClientToday | null> {
   if (!session.userId || session.role !== "client") return null;
   const clientId = session.userId;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayISODate();
   const client = db.select().from(schema.clients)
     .where(eq(schema.clients.id, clientId)).get();
   if (!client) return null;
 
-  // Compute current program day from startDate
-  const start = new Date(client.startDate);
-  const now = new Date(today);
-  const dayNum = Math.max(1, Math.min(90, Math.floor((now.getTime() - start.getTime()) / 86400000) + 1));
-
-  const programDay = db.select().from(schema.programDays)
-    .where(eq(schema.programDays.dayNumber, dayNum)).get();
-  if (!programDay) return null;
+  const position = getProgramPosition(client.startDate, today);
+  const plan = getDayPlan(position);
 
   // Today's check-in (may be null if not yet logged)
   const todayCheckin = db.select().from(schema.dailyCheckins)
@@ -85,16 +88,13 @@ export async function getClientToday(): Promise<ClientToday | null> {
     else break;
   }
 
-  // Workout streak (only counts A/B days, REST days pass through)
   let workoutStreak = 0;
-  for (let i = 0; i < 90; i++) {
+  for (let i = 0; i < recentCheckins.length; i++) {
     const date = recentCheckins[i]?.date;
     if (!date) break;
-    const dn = dayNum - i;
-    if (dn < 1) break;
-    const pd = db.select().from(schema.programDays).where(eq(schema.programDays.dayNumber, dn)).get();
-    if (!pd) break;
-    if (pd.workout === "REST") { workoutStreak++; continue; }
+    const dayPos = getProgramPosition(client.startDate, date);
+    const dayPlan = getDayPlan(dayPos);
+    if (dayPlan.workout === "REST") { workoutStreak++; continue; }
     if (recentCheckins[i]?.workoutDone === true) workoutStreak++;
     else break;
   }
@@ -102,17 +102,18 @@ export async function getClientToday(): Promise<ClientToday | null> {
   return {
     id: client.id,
     name: client.name.split(" ")[0],
-    programDay: dayNum,
-    weekNumber: programDay.weekNumber,
-    phase: programDay.phase as "Foundation" | "Build" | "Identity",
+    programDay: position.programDay,
+    weekNumber: position.ninetyWeek ?? position.programMonth ?? 0,
+    phase: position.ninetyPhase ?? blockLabel(position.block),
     startDate: client.startDate,
+    position,
     plan: {
       date: today,
-      dayLabel: programDay.dayLabel,
-      workout: programDay.workout as WorkoutLetter,
-      walkMinutes: programDay.walkMinutes,
-      isFastedWalk: programDay.isFastedWalk,
-      isDeload: programDay.isDeload,
+      dayLabel: plan.dayLabel,
+      workout: plan.workout,
+      walkMinutes: plan.walkMinutes,
+      isFastedWalk: plan.isFastedWalk,
+      isDeload: plan.isDeload,
     },
     workoutStreak,
     walkStreak,
@@ -580,7 +581,7 @@ export async function exportClientCSV(clientId: string): Promise<string | null> 
 // ============================================================================
 
 export function getDaysAgoLabel(iso: string | null): string { return daysAgoLabel(iso); }
-export function getTodayISODate(): string { return new Date().toISOString().slice(0, 10); }
+export function getTodayISODate(): string { return todayISODate(); }
 
 export interface CycleData {
   startWeight: number;
@@ -595,6 +596,9 @@ export interface CycleData {
   proteinAdherencePct: number;
   stepsAdherencePct: number;
   fastingAdherencePct: number;
+  monthLabel: string;
+  monthOf: number;
+  blockLabel: string;
 }
 
 export async function getCycleData(): Promise<CycleData | null> {
@@ -606,51 +610,54 @@ export async function getCycleData(): Promise<CycleData | null> {
     .where(eq(schema.clients.id, clientId)).get();
   if (!client) return null;
 
-  const startDate = new Date(client.startDate);
-  const now = new Date();
-  const daysInCycle = Math.max(1, Math.floor((now.getTime() - startDate.getTime()) / 86400000) + 1);
+  const today = todayISODate();
+  const position = getProgramPosition(client.startDate, today);
+  const window = currentMonthWindow(position);
 
-  // Get all weights for this client
+  const startWeight = client.startWeightLb;
+
   const weightRows = db.select().from(schema.weights)
     .where(eq(schema.weights.clientId, clientId))
     .orderBy(desc(schema.weights.date)).all();
 
-  const startWeight = client.startWeightLb;
   const currentWeight = weightRows[0]?.weightLb ?? startWeight;
-  const weightChange = currentWeight - startWeight;
+  const monthStartWeight = weightRows.find((w) => w.date <= window.start)?.weightLb ?? startWeight;
+  const weightChange = currentWeight - monthStartWeight;
 
-  // Get all check-ins for this cycle
   const checkins = db.select().from(schema.dailyCheckins)
     .where(eq(schema.dailyCheckins.clientId, clientId))
-    .orderBy(desc(schema.dailyCheckins.date)).all();
+    .orderBy(desc(schema.dailyCheckins.date)).all()
+    .filter((c) => c.date >= window.start && c.date <= window.end);
 
   const loggedDays = checkins.length;
 
-  // Averages
   const calorieValues = checkins.map((c) => c.proteinG).filter((v): v is number => v != null);
   const avgProtein = calorieValues.length ? Math.round(calorieValues.reduce((a, b) => a + b, 0) / calorieValues.length) : null;
   const stepValues = checkins.map((c) => c.steps).filter((v): v is number => v != null);
   const avgSteps = stepValues.length ? Math.round(stepValues.reduce((a, b) => a + b, 0) / stepValues.length) : null;
-  const avgCalories = null; // TODO: add calories to daily_checkins
+  const avgCalories = null;
 
-  // Exercise sessions (workoutDone === true)
   const exerciseSessions = checkins.filter((c) => c.workoutDone === true).length;
 
-  // Adherence percentages
   const proteinHits = checkins.filter((c) => (c.proteinG ?? 0) >= 140).length;
   const proteinAdherencePct = loggedDays ? Math.round((proteinHits / loggedDays) * 100) : 0;
   const stepHits = checkins.filter((c) => (c.steps ?? 0) >= 7000).length;
   const stepsAdherencePct = loggedDays ? Math.round((stepHits / loggedDays) * 100) : 0;
-  // Fasting adherence: any check-in with fastType set counts as fasting done
   const fastHits = checkins.filter((c) => c.fastType != null).length;
   const fastingAdherencePct = loggedDays ? Math.round((fastHits / loggedDays) * 100) : 0;
 
   return {
-    startWeight, currentWeight, weightChange,
-    daysInCycle, loggedDays,
+    startWeight: monthStartWeight,
+    currentWeight,
+    weightChange,
+    daysInCycle: window.day,
+    loggedDays,
     avgCalories, avgProtein, avgSteps,
     exerciseSessions,
     proteinAdherencePct, stepsAdherencePct, fastingAdherencePct,
+    monthLabel: position.block === "basicTraining" ? "Basic Training" : `Month ${position.programMonth ?? "—"}`,
+    monthOf: window.of,
+    blockLabel: blockLabel(position.block),
   };
 }
 

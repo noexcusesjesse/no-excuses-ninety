@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Stat, MoodPicker } from "./_components";
 import { FastingCard } from "./fasting-card";
 import { getClientToday, type WorkoutLetter } from "@/db/queries";
+import { formatPositionKicker, formatPositionSecondary, blockLabel } from "@/lib/program-position";
 import { Beef, Check, Circle, Droplet, Dumbbell, Footprints, Moon } from "lucide-react";
 import Link from "next/link";
 
@@ -57,17 +58,22 @@ export default async function ClientDashboardPage() {
           <div className="flex items-baseline justify-between">
             <div>
               <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                {client.plan.dayLabel} · Day {client.programDay} of 90
+                {formatPositionKicker(client.position, client.plan.dayLabel)}
               </p>
               <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">
                 Good morning, {client.name}.
               </h1>
+              {formatPositionSecondary(client.position) && (
+                <p className="mt-1 text-sm text-muted-foreground">{formatPositionSecondary(client.position)}</p>
+              )}
             </div>
             <div className="hidden text-right sm:block">
-              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Phase</p>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Block</p>
               <p className="text-sm font-semibold">
-                {client.phase}
-                <span className="ml-2 font-mono text-xs text-muted-foreground">Wk {client.weekNumber}/13</span>
+                {blockLabel(client.position.block)}
+                <span className="ml-2 font-mono text-xs text-muted-foreground">
+                  {client.position.programMonth ? `Month ${client.position.programMonth}/15` : `Day ${client.position.dayInBlock}/${client.position.daysInBlock}`}
+                </span>
               </p>
             </div>
           </div>
@@ -167,7 +173,7 @@ export default async function ClientDashboardPage() {
         </section>
 
         <Card className="mt-6">
-          <CardHeader><CardTitle>This week</CardTitle><CardDescription>Wk {client.weekNumber} of 13</CardDescription></CardHeader>
+          <CardHeader><CardTitle>This week</CardTitle><CardDescription>{blockLabel(client.position.block)}</CardDescription></CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
               {weekDays.map((d, i) => (

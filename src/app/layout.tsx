@@ -15,9 +15,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "No Excuses Ninety — 90-Day Reset Protocol",
+  title: "No Excuses Reset Program",
   description:
-    "Daily check-in, workouts, and tracking for the No Excuses Ninety 90-day reset protocol.",
+    "Daily check-in, workouts, and tracking for the No Excuses Reset Program.",
 };
 
 export default function RootLayout({

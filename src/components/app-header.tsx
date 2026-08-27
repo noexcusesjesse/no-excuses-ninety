@@ -18,7 +18,7 @@ export async function AppHeader({ role }: { role: "client" | "coach" }) {
               No Excuses
             </span>
             <span className="text-sm font-semibold tracking-tight">
-              Ninety
+              Reset
             </span>
           </div>
         </Link>

@@ -23,6 +23,7 @@ interface CoachContext {
   name: string;
   programDay: number;
   phase: string;
+  block?: string;
   proteinToday: number;
   proteinTarget: number;
   hydrationOz: number;
@@ -76,11 +77,11 @@ function generateResponse(message: string, ctx: CoachContext): string {
 
   // Fasting
   if (lower.includes("fast") || lower.includes("fasting") || lower.includes("window")) {
-    return `Your fasting window target is 14:10 or 16:8. You're on Day ${ctx.programDay} of the ${ctx.phase} phase. Remember: hydration matters, especially in Arizona heat — aim for 100 oz water minimum.`;
+    return `Overnight fasting only during Basic Training and The Ninety — no 24h or 36h windows in those blocks. You're in ${ctx.phase}. Hydration matters, especially in Arizona heat — aim for 100 oz water minimum.`;
   }
 
   // Default
-  return `You're on Day ${ctx.programDay} of 90, in the ${ctx.phase} phase. Protein: ${ctx.proteinToday}/${ctx.proteinTarget}g. Steps: ${ctx.stepsToday.toLocaleString()}. What specifically would you like to know?`;
+  return `You're in ${ctx.phase}${ctx.block ? ` (${ctx.block})` : ""}. Protein: ${ctx.proteinToday}/${ctx.proteinTarget}g. Steps: ${ctx.stepsToday.toLocaleString()}. What specifically would you like to know?`;
 }
 
 export async function POST(req: NextRequest) {

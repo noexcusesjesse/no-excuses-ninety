@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getWeightHistory, getClientProfile, getClientToday } from "@/db/queries";
 import { WeightChart } from "./weight-chart";
+import { formatPositionKicker, formatPositionSecondary } from "@/lib/program-position";
 
 export const dynamic = "force-dynamic";
 
@@ -37,9 +38,12 @@ export default async function ProgressPage() {
     <>
       <div className="mb-6">
         <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          {today.plan.dayLabel} · Day {today.programDay} of 90
+          {formatPositionKicker(today.position, today.plan.dayLabel)}
         </p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Progress</h1>
+        {formatPositionSecondary(today.position) && (
+          <p className="mt-1 text-sm text-muted-foreground">{formatPositionSecondary(today.position)}</p>
+        )}
       </div>
 
       {/* Weekly check-in card */}

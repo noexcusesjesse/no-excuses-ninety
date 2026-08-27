@@ -8,7 +8,7 @@ const TABS = [
   { href: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/app/log", label: "Log", icon: FileText },
   { href: "/app/progress", label: "Progress", icon: TrendingUp },
-  { href: "/app/cycle", label: "Cycle", icon: CalendarDays },
+  { href: "/app/month", label: "Month", icon: CalendarDays },
   { href: "/app/coach", label: "Coach", icon: MessageCircle },
 ];
 

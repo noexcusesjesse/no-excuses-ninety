@@ -1,5 +1,6 @@
 /**
- * 30-Day Decision Engine — determines cycle status from logged data.
+ * Monthly review helper — determines month status from logged data.
+ * Protocol months are 30-day cycles; this is a monthly tool, not "the program."
  *
  * From the build brief (Specs/app-build-brief.md §5):
  *   Compute weekly_rate = weight_change_over_cycle / days_in_cycle × 7

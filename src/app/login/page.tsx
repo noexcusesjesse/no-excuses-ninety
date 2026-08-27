@@ -1,8 +1,18 @@
 import { loginAction } from "../actions";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth";
+import { housePath } from "@/lib/session-config";
 
 export const dynamic = "force-dynamic";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams?: { error?: string };
+}) {
+  const session = await getSession();
+  if (session.userId) redirect(housePath(session.role));
+
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col items-center justify-center px-6 py-12">
       <div className="w-full">
@@ -11,27 +21,19 @@ export default function LoginPage() {
             No Excuses
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-            Ninety
+            Reset
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Sign in to your account
           </p>
         </div>
 
-        <form
-          action={async (formData: FormData) => {
-            "use server";
-            const email = formData.get("email") as string;
-            const password = formData.get("password") as string;
-            const result = await loginAction(email, password);
-            if (result.error) {
-              // TODO: show error in UI — for now redirect to login with error
-              // We can't easily pass error back without client component.
-              // For a prototype, the inline server action handles it.
-            }
-          }}
-          className="space-y-4"
-        >
+        <form action={loginAction} className="space-y-4">
+          {searchParams?.error && (
+            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              Invalid email or password
+            </p>
+          )}
           <div>
             <label
               htmlFor="email"
