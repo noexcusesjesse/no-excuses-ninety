@@ -4,10 +4,13 @@
 import assert from "node:assert/strict";
 import {
   FIRST_COHORT_DAY_ONE,
+  day90InterviewStatus,
+  formatMonthLabel,
   formatPositionKicker,
   formatPositionSecondary,
   getDayPlan,
   getProgramPosition,
+  isBeforeDay1,
   isOvernightOnlyBlock,
   programEndDate,
 } from "./program-position";
@@ -167,5 +170,17 @@ assert.equal(getProgramPosition(START, "2027-04-05").programMonth, 8);
 assert.equal(typeOn("2027-04-05", CLEARED_36), "reset_24hr");
 assert.equal(hoursOn("2027-04-05", CLEARED_36), 36);
 assert.equal(hoursOn("2027-04-05", CLEARED_24), 24);
+
+// --- Staff ops helpers (Day 90 interview + Day 1 readiness) ---
+assert.equal(isBeforeDay1(aug27.block), true);
+assert.equal(isBeforeDay1(sep1.block), false);
+assert.equal(isBeforeDay1(day91.block), false);
+assert.equal(day90InterviewStatus(aug27), "not_yet");
+assert.equal(day90InterviewStatus(sep1), "not_yet");
+assert.equal(day90InterviewStatus(getProgramPosition(START, "2026-11-22")), "upcoming");
+assert.equal(day90InterviewStatus(day90), "due");
+assert.equal(day90InterviewStatus(day91), "due");
+assert.equal(formatMonthLabel(aug27), "Runway 10/14");
+assert.equal(formatMonthLabel(sep1), "Month 1 of 15");
 
 console.log("program-position tests passed");

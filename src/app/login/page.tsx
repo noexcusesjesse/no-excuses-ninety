@@ -77,6 +77,8 @@ export default async function LoginPage({
         </form>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
+          Staff: staff@loadlinefitness.com / staff-demo
+          <br />
           Coach: coach@loadlinefitness.com / loadline-demo
           <br />
           Client: marcus@example.com / client-demo

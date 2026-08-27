@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getIronSession } from "iron-session";
-import { sessionOptions, type SessionData } from "@/lib/session-config";
+import { housePath, sessionOptions, type SessionData } from "@/lib/session-config";
 
 // Edge-compatible session check — only imports session config, no DB
 async function getSession(req: NextRequest) {
@@ -11,36 +11,37 @@ async function getSession(req: NextRequest) {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Protect /client, /coach, and /app routes
   const isProtected =
     pathname.startsWith("/client") ||
     pathname.startsWith("/coach") ||
-    pathname.startsWith("/app");
+    pathname.startsWith("/app") ||
+    pathname.startsWith("/staff");
   if (!isProtected) return NextResponse.next();
 
   const session = await getSession(req);
   const userId = session.userId;
 
   if (!userId) {
-    const loginUrl = new URL("/login", req.url);
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  // Role-based access: /coach requires coach role
+  const home = housePath(session.role);
+
+  if (pathname.startsWith("/staff") && session.role !== "staff") {
+    return NextResponse.redirect(new URL(home, req.url));
+  }
+
   if (pathname.startsWith("/coach") && session.role !== "coach") {
-    const homeUrl = new URL("/", req.url);
-    return NextResponse.redirect(homeUrl);
+    return NextResponse.redirect(new URL(home, req.url));
   }
 
-  // /client and /app require client role
   if ((pathname.startsWith("/client") || pathname.startsWith("/app")) && session.role !== "client") {
-    const homeUrl = new URL("/", req.url);
-    return NextResponse.redirect(homeUrl);
+    return NextResponse.redirect(new URL(home, req.url));
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/client/:path*", "/coach/:path*", "/app/:path*"],
+  matcher: ["/client/:path*", "/coach/:path*", "/app/:path*", "/staff/:path*"],
 };

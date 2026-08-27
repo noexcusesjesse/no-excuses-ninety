@@ -5,15 +5,28 @@ import type { SessionOptions } from "iron-session";
  * DB-dependent auth functions are in @/lib/auth.ts (Node only).
  */
 
+export type SessionRole = "client" | "coach" | "staff";
+
 export interface SessionData {
   userId: string;
-  role: "client" | "coach";
+  role: SessionRole;
   email: string;
+  /**
+   * When Staff opens a client or coach view on purpose, the session becomes
+   * that role so Client/Coach UI is unchanged (no Staff chrome). This holds
+   * Jesse's staff identity so Exit preview can restore /staff.
+   */
+  staffReturn?: {
+    userId: string;
+    email: string;
+  };
 }
 
 /** Where a signed-in user lives. Client never sees Staff; Coach roster is unchanged. */
 export function housePath(role: SessionData["role"]): string {
-  return role === "coach" ? "/coach" : "/app/dashboard";
+  if (role === "staff") return "/staff";
+  if (role === "coach") return "/coach";
+  return "/app/dashboard";
 }
 
 const sessionPassword =

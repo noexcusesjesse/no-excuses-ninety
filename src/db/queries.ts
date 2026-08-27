@@ -12,11 +12,16 @@ import { db, schema } from "./client";
 import { and, eq, desc, gte } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import {
+  addDays,
   blockLabel,
   currentMonthWindow,
+  day90InterviewStatus,
+  formatMonthLabel,
   getDayPlan,
   getProgramPosition,
+  isBeforeDay1,
   todayISODate,
+  type Day90InterviewStatus,
   type ProgramPosition,
 } from "@/lib/program-position";
 
@@ -735,5 +740,125 @@ export async function getClientProfile(): Promise<ClientProfile | null> {
     startDate: client.startDate,
     physicianClearedExtendedFasts: client.physicianClearedExtendedFasts ?? false,
     ageYears,
+  };
+}
+
+// ============================================================================
+// STAFF — PROGRAM OPS (not a daily log)
+// ============================================================================
+
+export interface StaffClientRow {
+  id: string;
+  name: string;
+  email: string;
+  coachId: string;
+  coachName: string;
+  startDate: string;
+  blockLabel: string;
+  monthLabel: string;
+  programDay: number;
+  lastCheckIn: string | null;
+  missingLogs: boolean;
+  physicianClearedExtendedFasts: boolean;
+  notReadyForDay1: boolean;
+  day90Interview: Day90InterviewStatus;
+  extendedFast24hEligibleByMonth: boolean;
+}
+
+export interface StaffCoachRow {
+  id: string;
+  name: string;
+  email: string;
+  clientCount: number;
+}
+
+export interface StaffOpsData {
+  coaches: StaffCoachRow[];
+  clients: StaffClientRow[];
+  counts: {
+    clients: number;
+    coaches: number;
+    notReadyForDay1: number;
+    missingLogs: number;
+    missingClearance: number;
+    day90Due: number;
+    day90Upcoming: number;
+  };
+}
+
+export async function getStaffOps(): Promise<StaffOpsData | null> {
+  const session = await getSession();
+  if (!session.userId || session.role !== "staff") return null;
+
+  const today = todayISODate();
+  const yesterday = addDays(today, -1);
+
+  const coaches = db.select().from(schema.coaches).all();
+  const clients = db.select().from(schema.clients).all();
+  const coachName = new Map(coaches.map((c) => [c.id, c.name]));
+
+  const rows: StaffClientRow[] = clients.map((c) => {
+    const position = getProgramPosition(c.startDate, today);
+    const lastCheckin = db.select().from(schema.dailyCheckins)
+      .where(eq(schema.dailyCheckins.clientId, c.id))
+      .orderBy(desc(schema.dailyCheckins.date))
+      .limit(1)
+      .get();
+
+    const started = position.block !== "before";
+    const lastDate = lastCheckin?.date ?? null;
+    const missingLogs = started && (!lastDate || lastDate < yesterday);
+
+    return {
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      coachId: c.coachId,
+      coachName: coachName.get(c.coachId) ?? "—",
+      startDate: c.startDate,
+      blockLabel: blockLabel(position.block),
+      monthLabel: formatMonthLabel(position),
+      programDay: position.programDay,
+      lastCheckIn: lastDate,
+      missingLogs,
+      physicianClearedExtendedFasts: c.physicianClearedExtendedFasts ?? false,
+      notReadyForDay1: isBeforeDay1(position.block),
+      day90Interview: day90InterviewStatus(position),
+      extendedFast24hEligibleByMonth: position.extendedFast24hEligibleByMonth,
+    };
+  });
+
+  rows.sort((a, b) => {
+    const rank = (r: StaffClientRow) => {
+      if (r.notReadyForDay1) return 0;
+      if (r.missingLogs) return 1;
+      if (r.day90Interview === "due") return 2;
+      if (!r.physicianClearedExtendedFasts) return 3;
+      return 4;
+    };
+    const d = rank(a) - rank(b);
+    if (d !== 0) return d;
+    return a.name.localeCompare(b.name);
+  });
+
+  const coachRows: StaffCoachRow[] = coaches.map((c) => ({
+    id: c.id,
+    name: c.name,
+    email: c.email,
+    clientCount: clients.filter((cl) => cl.coachId === c.id).length,
+  })).sort((a, b) => a.name.localeCompare(b.name));
+
+  return {
+    coaches: coachRows,
+    clients: rows,
+    counts: {
+      clients: rows.length,
+      coaches: coachRows.length,
+      notReadyForDay1: rows.filter((r) => r.notReadyForDay1).length,
+      missingLogs: rows.filter((r) => r.missingLogs).length,
+      missingClearance: rows.filter((r) => !r.physicianClearedExtendedFasts).length,
+      day90Due: rows.filter((r) => r.day90Interview === "due").length,
+      day90Upcoming: rows.filter((r) => r.day90Interview === "upcoming").length,
+    },
   };
 }
