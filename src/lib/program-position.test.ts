@@ -4,11 +4,16 @@
 import assert from "node:assert/strict";
 import {
   FIRST_COHORT_DAY_ONE,
+  coachProgramSnapshot,
+  extendedFastProtocol,
+  formatCoachWhere,
   formatPositionKicker,
   formatPositionSecondary,
   getDayPlan,
   getProgramPosition,
+  isMissingLog,
   isOvernightOnlyBlock,
+  monthLabel,
   programEndDate,
 } from "./program-position";
 import {
@@ -167,5 +172,73 @@ assert.equal(getProgramPosition(START, "2027-04-05").programMonth, 8);
 assert.equal(typeOn("2027-04-05", CLEARED_36), "reset_24hr");
 assert.equal(hoursOn("2027-04-05", CLEARED_36), 36);
 assert.equal(hoursOn("2027-04-05", CLEARED_24), 24);
+
+// --- Coach house (15-month identity, no Day N of 90 clamp) ---
+assert.equal(monthLabel(aug27), "Pre-Day 1");
+assert.equal(formatCoachWhere(aug27), "Basic Training · Pre-Day 1 · Day 10 of 14");
+assert.ok(!formatCoachWhere(aug27).includes("of 90"));
+assert.equal(extendedFastProtocol(aug27).overnightOnly, true);
+assert.equal(extendedFastProtocol(aug27).inProtocol24h, false);
+assert.equal(extendedFastProtocol(aug27).inProtocol36h, false);
+assert.match(extendedFastProtocol(aug27).label, /not in protocol/i);
+assert.match(extendedFastProtocol(aug27).label, /Basic Training/);
+
+const coachAug27 = coachProgramSnapshot(START, "2026-08-27", "2026-08-26", true);
+assert.equal(coachAug27.blockLabel, "Basic Training");
+assert.equal(coachAug27.monthLabel, "Pre-Day 1");
+assert.equal(coachAug27.whereLine, "Basic Training · Pre-Day 1 · Day 10 of 14");
+assert.equal(coachAug27.missingLog, false);
+assert.equal(coachAug27.physicianClearedExtendedFasts, true);
+assert.equal(coachAug27.extendedFast24hInProtocol, false);
+assert.equal(coachAug27.overnightOnly, true);
+
+assert.equal(monthLabel(sep1), "Month 1");
+assert.equal(formatCoachWhere(sep1), "The Ninety · Month 1 Foundation · Day 1 of 90");
+assert.equal(extendedFastProtocol(sep1).overnightOnly, true);
+assert.equal(extendedFastProtocol(sep1).inProtocol24h, false);
+assert.match(extendedFastProtocol(sep1).label, /The Ninety/);
+
+const coachSep1 = coachProgramSnapshot(START, "2026-09-01", "2026-08-31", true);
+assert.equal(coachSep1.blockLabel, "The Ninety");
+assert.equal(coachSep1.monthLabel, "Month 1");
+assert.equal(coachSep1.position.programDay, 1);
+assert.equal(coachSep1.extendedFast24hInProtocol, false);
+
+const coachDay90 = coachProgramSnapshot(START, "2026-11-29", "2026-11-29", true);
+assert.equal(coachDay90.blockLabel, "The Ninety");
+assert.equal(coachDay90.position.ninetyPhase, "Identity");
+
+const coachDay91 = coachProgramSnapshot(START, "2026-11-30", "2026-11-29", true);
+assert.equal(coachDay91.blockLabel, "The Build");
+assert.equal(coachDay91.monthLabel, "Month 4");
+assert.equal(coachDay91.position.programDay, 91);
+assert.ok(!coachDay91.whereLine.includes("Identity"));
+assert.ok(!coachDay91.whereLine.includes("Day 90"));
+assert.equal(coachDay91.overnightOnly, false);
+assert.equal(coachDay91.extendedFast24hInProtocol, false);
+
+const coachM7 = coachProgramSnapshot(START, "2027-02-28", "2027-02-27", true);
+assert.equal(coachM7.monthLabel, "Month 7");
+assert.equal(coachM7.extendedFast24hInProtocol, true);
+assert.equal(coachM7.extendedFast36hInProtocol, false);
+assert.match(coachM7.fastProtocolLabel, /24h in protocol/);
+
+const coachM8 = coachProgramSnapshot(START, "2027-03-30", "2027-03-29", false);
+assert.equal(coachM8.extendedFast24hInProtocol, true);
+assert.equal(coachM8.extendedFast36hInProtocol, true);
+assert.equal(coachM8.physicianClearedExtendedFasts, false);
+
+const coachMastery = coachProgramSnapshot(START, "2027-11-30", "2027-11-29", true);
+assert.equal(coachMastery.blockLabel, "Mastery");
+assert.equal(coachMastery.monthLabel, "Month 15");
+
+assert.equal(isMissingLog(null, "2026-08-27"), true);
+assert.equal(isMissingLog("2026-08-27", "2026-08-27"), false);
+assert.equal(isMissingLog("2026-08-26", "2026-08-27"), false);
+assert.equal(isMissingLog("2026-08-25", "2026-08-27"), true);
+
+const missing = coachProgramSnapshot(START, "2026-08-27", null, false);
+assert.equal(missing.missingLog, true);
+assert.equal(missing.daysSinceCheckIn, null);
 
 console.log("program-position tests passed");

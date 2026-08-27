@@ -11,7 +11,7 @@ export interface SessionData {
   email: string;
 }
 
-/** Where a signed-in user lives. Client never sees Staff; Coach roster is unchanged. */
+/** Where a signed-in user lives. Client never sees Staff. Coach lands on /coach. */
 export function housePath(role: SessionData["role"]): string {
   return role === "coach" ? "/coach" : "/app/dashboard";
 }

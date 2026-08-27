@@ -3,6 +3,7 @@ import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getClientDetail, getDaysAgoLabel } from "@/db/queries";
+import { formatDateShort, formatDayInBlock } from "@/lib/program-position";
 import { ArrowLeft, Download, TrendingDown, TrendingUp } from "lucide-react";
 import { NotesPanel } from "./notes-panel";
 import { BandCalibrationPanel } from "./band-calibration-panel";
@@ -25,37 +26,45 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
     );
   }
 
+  const snap = detail.snapshot;
+  const pos = snap.position;
   const trendDown = detail.weightTrend7d < 0;
   const totalLost = detail.startWeightLb - (detail.currentWeightLb ?? detail.startWeightLb);
   const goalWeight = 200;
+  const ninetyWeekLine =
+    pos.block === "ninety" && pos.ninetyWeek
+      ? `Wk ${pos.ninetyWeek} of 13${pos.isDeload ? " · Deload" : ""}`
+      : null;
 
   return (
     <>
       <AppHeader role="coach" />
       <main className="mx-auto max-w-5xl px-4 pb-24 pt-6 sm:px-6">
-        {/* Back link */}
         <Link href="/coach" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-3.5 w-3.5" />
           Back to roster
         </Link>
 
-        {/* Header */}
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{detail.name}</h1>
-            <div className="mt-1 flex items-center gap-3 font-mono text-[11px] text-muted-foreground">
-              <span>Day {detail.programDay}/90</span>
-              <span>·</span>
-              <span>{detail.phase} (Wk {detail.weekNumber}/13)</span>
-              <span>·</span>
-              <span>Age: {detail.ageYears ?? "—"}</span>
-              {detail.physicianClearedExtendedFasts && (
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              Coach · No Excuses Reset Program
+            </p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">{detail.name}</h1>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-muted-foreground">
+              <span>{snap.whereLine}</span>
+              {ninetyWeekLine && (
                 <>
                   <span>·</span>
-                  <span className="text-success">Physician cleared ✓</span>
+                  <span>{ninetyWeekLine}</span>
                 </>
               )}
+              <span>·</span>
+              <span>Age: {detail.ageYears ?? "—"}</span>
             </div>
+            {snap.secondary && (
+              <p className="mt-1 text-sm text-muted-foreground">{snap.secondary}</p>
+            )}
           </div>
           <a href={`/api/coach/export?clientId=${detail.id}`}>
             <Button variant="outline">
@@ -65,7 +74,67 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
           </a>
         </div>
 
-        {/* Summary cards */}
+        <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-md border border-border bg-card p-3">
+            <p className="font-mono text-[10px] uppercase text-muted-foreground">Block</p>
+            <p className="mt-1 text-lg font-semibold leading-tight">{snap.blockLabel}</p>
+            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{formatDayInBlock(pos)}</p>
+          </div>
+          <div className="rounded-md border border-border bg-card p-3">
+            <p className="font-mono text-[10px] uppercase text-muted-foreground">Month</p>
+            <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{snap.monthLabel}</p>
+            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+              {pos.programMonth ? `of 15` : "Before Day 1 of The Ninety"}
+            </p>
+          </div>
+          <div className="rounded-md border border-border bg-card p-3">
+            <p className="font-mono text-[10px] uppercase text-muted-foreground">Last log</p>
+            <p className={`mt-1 text-lg font-semibold ${snap.missingLog ? "text-destructive" : ""}`}>
+              {getDaysAgoLabel(detail.lastCheckIn)}
+            </p>
+            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+              {snap.missingLog ? "Missing — outreach" : "Logged recently"}
+            </p>
+          </div>
+          <div className="rounded-md border border-border bg-card p-3">
+            <p className="font-mono text-[10px] uppercase text-muted-foreground">Extended fasts</p>
+            <p className="mt-1 text-sm font-semibold leading-tight">
+              {snap.physicianClearedExtendedFasts ? "Physician cleared" : "Not cleared"}
+            </p>
+            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+              {snap.overnightOnly
+                ? "24h/36h not in protocol"
+                : snap.extendedFast24hInProtocol
+                  ? snap.extendedFast36hInProtocol
+                    ? "24h in protocol · 36h month-eligible"
+                    : "24h in protocol · 36h from Month 8"
+                  : "24h from Month 7"}
+            </p>
+          </div>
+        </section>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Fasting protocol</CardTitle>
+            <CardDescription>
+              Block and month gates — not a prescription. LoadLine does not prescribe, dose, or adjust medications.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <p>{snap.fastProtocolLabel}</p>
+            <p className="text-muted-foreground">
+              Clearance is stored separately from protocol. Even if the physician flag is on,
+              24h and 36h stay out of protocol during Basic Training and The Ninety.
+              First 24h is Month 7+ of The Build; first 36h is Month 8+ and only with the extended_36hr variant.
+            </p>
+            <p className="font-mono text-[11px] text-muted-foreground">
+              Variant on file: {detail.resetVariant === "extended_36hr" ? "extended_36hr" : "standard_24hr"}
+              {" · "}Day 1 of The Ninety: {formatDateShort(detail.startDate)}
+              {" · "}Program ends {formatDateShort(pos.programEndDate)}
+            </p>
+          </CardContent>
+        </Card>
+
         <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-md border border-border bg-card p-3">
             <p className="font-mono text-[10px] uppercase text-muted-foreground">Start</p>
@@ -85,7 +154,6 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
           </div>
         </section>
 
-        {/* 7-day stats */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>7-Day Compliance</CardTitle>
@@ -118,7 +186,6 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
           </CardContent>
         </Card>
 
-        {/* Weight chart */}
         {detail.weightHistory.length > 0 && (
           <Card className="mb-6">
             <CardHeader>
@@ -131,7 +198,6 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
           </Card>
         )}
 
-        {/* Coach notes */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Coach Notes</CardTitle>
@@ -142,18 +208,16 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
           </CardContent>
         </Card>
 
-        {/* Band calibration */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Band Calibration</CardTitle>
-            <CardDescription>Day 1 resistance band baseline — re-calibrate at Day 31, 61</CardDescription>
+            <CardDescription>Day 1 of The Ninety baseline — re-calibrate at Day 31, 61</CardDescription>
           </CardHeader>
           <CardContent>
             <BandCalibrationPanel clientId={detail.id} calibration={detail.bandCalibration} />
           </CardContent>
         </Card>
 
-        {/* Recent check-ins */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Recent Check-Ins</CardTitle>

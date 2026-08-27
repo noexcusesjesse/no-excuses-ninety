@@ -12,11 +12,15 @@ import { db, schema } from "./client";
 import { and, eq, desc, gte } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import {
+  addDays,
   blockLabel,
+  coachProgramSnapshot,
   currentMonthWindow,
+  diffDays,
   getDayPlan,
   getProgramPosition,
   todayISODate,
+  type CoachProgramSnapshot,
   type ProgramPosition,
 } from "@/lib/program-position";
 
@@ -135,9 +139,8 @@ export interface CoachClientRow {
   id: string;
   name: string;
   initials: string;
-  programDay: number;
-  weekNumber: number;
-  phase: "Foundation" | "Build" | "Identity";
+  startDate: string;
+  snapshot: CoachProgramSnapshot;
   lastCheckIn: string | null;
   workoutCompletion: number;
   walkCompletion: number;
@@ -153,12 +156,55 @@ function initials(name: string): string {
 }
 
 function daysAgoLabel(iso: string | null): string {
-  if (!iso) return "—";
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  if (days === 0) return "Today";
+  if (!iso) return "Never";
+  const days = diffDays(iso, todayISODate());
+  if (days <= 0) return "Today";
   if (days === 1) return "Yesterday";
   if (days < 7) return `${days}d ago`;
   return `${Math.floor(days / 7)}w ago`;
+}
+
+function lastCheckinDate(clientId: string): string | null {
+  const row = db.select({ date: schema.dailyCheckins.date })
+    .from(schema.dailyCheckins)
+    .where(eq(schema.dailyCheckins.clientId, clientId))
+    .orderBy(desc(schema.dailyCheckins.date))
+    .limit(1)
+    .get();
+  return row?.date ?? null;
+}
+
+function rolling7DayStats(clientId: string, asOf: string) {
+  const sevenDaysAgo = addDays(asOf, -6);
+  const recent = db.select().from(schema.dailyCheckins)
+    .where(and(eq(schema.dailyCheckins.clientId, clientId), gte(schema.dailyCheckins.date, sevenDaysAgo)))
+    .all();
+
+  const aBDaysInWindow = recent.filter((ci) => {
+    const d = new Date(ci.date + "T00:00:00Z");
+    const dow = d.getUTCDay();
+    return dow === 1 || dow === 3 || dow === 5;
+  });
+  const workoutsCompleted = aBDaysInWindow.filter((ci) => ci.workoutDone === true).length;
+  const workoutCompletion = aBDaysInWindow.length ? Math.round((workoutsCompleted / aBDaysInWindow.length) * 100) : 0;
+  const walksCompleted = recent.filter((ci) => (ci.walkMinutes ?? 0) > 0).length;
+  const walkCompletion = recent.length ? Math.round((walksCompleted / recent.length) * 100) : 0;
+  const proteinHits = recent.filter((ci) => (ci.proteinG ?? 0) >= 140).length;
+  const proteinHitRate = recent.length ? Math.round((proteinHits / recent.length) * 100) : 0;
+  const moods = recent.map((ci) => ci.mood).filter((m): m is number => m != null);
+  const moodAvg = moods.length ? Math.round((moods.reduce((a, b) => a + b, 0) / moods.length) * 10) / 10 : 0;
+
+  return { workoutCompletion, walkCompletion, proteinHitRate, moodAvg };
+}
+
+function complianceStatus(
+  daysSince: number,
+  workoutCompletion: number,
+  proteinHitRate: number,
+): "on-track" | "slipping" | "off" {
+  if (daysSince > 5 || workoutCompletion < 30) return "off";
+  if (workoutCompletion < 70 || proteinHitRate < 60) return "slipping";
+  return "on-track";
 }
 
 export async function getCoachClients(): Promise<CoachClientRow[]> {
@@ -173,32 +219,19 @@ export async function getCoachClients(): Promise<CoachClientRow[]> {
   const clients = db.select().from(schema.clients)
     .where(eq(schema.clients.coachId, coach.id)).all();
 
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const asOf = todayISODate();
+  const sevenDaysAgo = addDays(asOf, -6);
 
   return clients.map((c) => {
-    const dayNum = Math.max(1, Math.min(90, Math.floor((Date.now() - new Date(c.startDate).getTime()) / 86400000) + 1));
-    const programDay = db.select().from(schema.programDays).where(eq(schema.programDays.dayNumber, dayNum)).get();
-
-    // Last 7 days check-ins
-    const recent = db.select().from(schema.dailyCheckins)
-      .where(and(eq(schema.dailyCheckins.clientId, c.id), gte(schema.dailyCheckins.date, sevenDaysAgo)))
-      .all();
-
-    // Completion rates (workouts completed / A+B days in window)
-    const aBDaysInWindow = recent.filter((ci) => {
-      const d = new Date(ci.date);
-      const dow = d.getUTCDay(); // 0=Sun
-      return dow === 1 || dow === 3 || dow === 5;
-    });
-    const workoutsCompleted = aBDaysInWindow.filter((ci) => ci.workoutDone === true).length;
-    const workoutCompletion = aBDaysInWindow.length ? Math.round((workoutsCompleted / aBDaysInWindow.length) * 100) : 0;
-    const walksCompleted = recent.filter((ci) => (ci.walkMinutes ?? 0) > 0).length;
-    const walkCompletion = recent.length ? Math.round((walksCompleted / recent.length) * 100) : 0;
-    const proteinHits = recent.filter((ci) => (ci.proteinG ?? 0) >= 140).length;
-    const proteinHitRate = recent.length ? Math.round((proteinHits / recent.length) * 100) : 0;
-
-    const moods = recent.map((ci) => ci.mood).filter((m): m is number => m != null);
-    const moodAvg = moods.length ? Math.round((moods.reduce((a, b) => a + b, 0) / moods.length) * 10) / 10 : 0;
+    const lastCheckIn = lastCheckinDate(c.id);
+    const snapshot = coachProgramSnapshot(
+      c.startDate,
+      asOf,
+      lastCheckIn,
+      c.physicianClearedExtendedFasts ?? false,
+    );
+    const { workoutCompletion, walkCompletion, proteinHitRate, moodAvg } =
+      rolling7DayStats(c.id, asOf);
 
     const w7dAgo = db.select().from(schema.weights)
       .where(and(eq(schema.weights.clientId, c.id), eq(schema.weights.date, sevenDaysAgo)))
@@ -208,27 +241,32 @@ export async function getCoachClients(): Promise<CoachClientRow[]> {
       .orderBy(desc(schema.weights.date)).limit(1).get();
     const weightTrend7d = w7dAgo && wNow ? Math.round((wNow.weightLb - w7dAgo.weightLb) * 10) / 10 : 0;
 
-    const lastCheckin = recent.sort((a, b) => b.date.localeCompare(a.date))[0];
-    const daysSince = lastCheckin ? Math.floor((Date.now() - new Date(lastCheckin.date).getTime()) / 86400000) : 999;
-    const status: "on-track" | "slipping" | "off" =
-      daysSince > 5 || workoutCompletion < 30 ? "off"
-      : workoutCompletion < 70 || proteinHitRate < 60 ? "slipping"
-      : "on-track";
+    const daysSince = snapshot.daysSinceCheckIn ?? 999;
+    const status = complianceStatus(daysSince, workoutCompletion, proteinHitRate);
 
     return {
-      id: c.id, name: c.name, initials: initials(c.name),
-      programDay: dayNum,
-      weekNumber: programDay?.weekNumber ?? 1,
-      phase: (programDay?.phase as "Foundation" | "Build" | "Identity") ?? "Foundation",
-      lastCheckIn: lastCheckin?.date ?? null,
-      workoutCompletion, walkCompletion, proteinHitRate,
-      weightTrend7d, status,
+      id: c.id,
+      name: c.name,
+      initials: initials(c.name),
+      startDate: c.startDate,
+      snapshot,
+      lastCheckIn,
+      workoutCompletion,
+      walkCompletion,
+      proteinHitRate,
+      weightTrend7d,
+      status,
       currentWeight: wNow?.weightLb ?? null,
       moodAvg,
     };
   }).sort((a, b) => {
     const order = { "off": 0, "slipping": 1, "on-track": 2 } as const;
-    return order[a.status] - order[b.status];
+    const byStatus = order[a.status] - order[b.status];
+    if (byStatus !== 0) return byStatus;
+    if (a.snapshot.missingLog !== b.snapshot.missingLog) {
+      return a.snapshot.missingLog ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name);
   });
 }
 
@@ -246,10 +284,8 @@ export interface ClientDetail {
   heightIn: number | null;
   dateOfBirth: string | null;
   ageYears: number | null;
-  physicianClearedExtendedFasts: boolean;
-  programDay: number;
-  weekNumber: number;
-  phase: "Foundation" | "Build" | "Identity";
+  snapshot: CoachProgramSnapshot;
+  resetVariant: "standard_24hr" | "extended_36hr";
   workoutCompletion: number;
   walkCompletion: number;
   proteinHitRate: number;
@@ -305,29 +341,17 @@ export async function getClientDetail(
   // Verify this client belongs to the coach
   if (client.coachId !== session.userId) return null;
 
-  const dayNum = Math.max(1, Math.min(90,
-    Math.floor((Date.now() - new Date(client.startDate).getTime()) / 86400000) + 1));
-  const programDay = db.select().from(schema.programDays)
-    .where(eq(schema.programDays.dayNumber, dayNum)).get();
-
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-  const recent = db.select().from(schema.dailyCheckins)
-    .where(and(eq(schema.dailyCheckins.clientId, clientId), gte(schema.dailyCheckins.date, sevenDaysAgo)))
-    .all();
-
-  const aBDaysInWindow = recent.filter((ci) => {
-    const d = new Date(ci.date);
-    const dow = d.getUTCDay();
-    return dow === 1 || dow === 3 || dow === 5;
-  });
-  const workoutsCompleted = aBDaysInWindow.filter((ci) => ci.workoutDone === true).length;
-  const workoutCompletion = aBDaysInWindow.length ? Math.round((workoutsCompleted / aBDaysInWindow.length) * 100) : 0;
-  const walksCompleted = recent.filter((ci) => (ci.walkMinutes ?? 0) > 0).length;
-  const walkCompletion = recent.length ? Math.round((walksCompleted / recent.length) * 100) : 0;
-  const proteinHits = recent.filter((ci) => (ci.proteinG ?? 0) >= 140).length;
-  const proteinHitRate = recent.length ? Math.round((proteinHits / recent.length) * 100) : 0;
-  const moods = recent.map((ci) => ci.mood).filter((m): m is number => m != null);
-  const moodAvg = moods.length ? Math.round((moods.reduce((a, b) => a + b, 0) / moods.length) * 10) / 10 : 0;
+  const asOf = todayISODate();
+  const sevenDaysAgo = addDays(asOf, -6);
+  const lastCheckIn = lastCheckinDate(clientId);
+  const snapshot = coachProgramSnapshot(
+    client.startDate,
+    asOf,
+    lastCheckIn,
+    client.physicianClearedExtendedFasts ?? false,
+  );
+  const { workoutCompletion, walkCompletion, proteinHitRate, moodAvg } =
+    rolling7DayStats(clientId, asOf);
 
   const w7dAgo = db.select().from(schema.weights)
     .where(and(eq(schema.weights.clientId, clientId), eq(schema.weights.date, sevenDaysAgo))).get();
@@ -335,29 +359,21 @@ export async function getClientDetail(
     .where(eq(schema.weights.clientId, clientId)).orderBy(desc(schema.weights.date)).limit(1).get();
   const weightTrend7d = w7dAgo && wNow ? Math.round((wNow.weightLb - w7dAgo.weightLb) * 10) / 10 : 0;
 
-  const lastCheckin = recent.sort((a, b) => b.date.localeCompare(a.date))[0];
-  const daysSince = lastCheckin ? Math.floor((Date.now() - new Date(lastCheckin.date).getTime()) / 86400000) : 999;
-  const status: "on-track" | "slipping" | "off" =
-    daysSince > 5 || workoutCompletion < 30 ? "off"
-    : workoutCompletion < 70 || proteinHitRate < 60 ? "slipping"
-    : "on-track";
+  const daysSince = snapshot.daysSinceCheckIn ?? 999;
+  const status = complianceStatus(daysSince, workoutCompletion, proteinHitRate);
 
-  // All check-ins for this client
   const allCheckins = db.select().from(schema.dailyCheckins)
     .where(eq(schema.dailyCheckins.clientId, clientId))
     .orderBy(desc(schema.dailyCheckins.date)).limit(90).all();
 
-  // All weights for this client
   const allWeights = db.select().from(schema.weights)
     .where(eq(schema.weights.clientId, clientId))
     .orderBy(schema.weights.date).all();
 
-  // Coach notes (from auditLog where action = "note_added")
   const notes = db.select().from(schema.auditLog)
     .where(and(eq(schema.auditLog.clientId, clientId), eq(schema.auditLog.action, "note_added")))
     .orderBy(desc(schema.auditLog.createdAt)).all();
 
-  // Band calibration (from auditLog where action = "band_calibration")
   const calibration = db.select().from(schema.auditLog)
     .where(and(eq(schema.auditLog.clientId, clientId), eq(schema.auditLog.action, "band_calibration")))
     .orderBy(desc(schema.auditLog.createdAt)).all();
@@ -367,6 +383,8 @@ export async function getClientDetail(
     const dob = new Date(client.dateOfBirth);
     ageYears = Math.floor((Date.now() - dob.getTime()) / (365.25 * 86400000));
   }
+
+  const resetVariant = client.resetVariant === "extended_36hr" ? "extended_36hr" : "standard_24hr";
 
   return {
     id: client.id,
@@ -378,13 +396,11 @@ export async function getClientDetail(
     heightIn: client.heightIn ?? null,
     dateOfBirth: client.dateOfBirth ?? null,
     ageYears,
-    physicianClearedExtendedFasts: client.physicianClearedExtendedFasts ?? false,
-    programDay: dayNum,
-    weekNumber: programDay?.weekNumber ?? 1,
-    phase: (programDay?.phase as "Foundation" | "Build" | "Identity") ?? "Foundation",
+    snapshot,
+    resetVariant,
     workoutCompletion, walkCompletion, proteinHitRate,
     weightTrend7d, status, moodAvg,
-    lastCheckIn: lastCheckin?.date ?? null,
+    lastCheckIn,
     checkIns: allCheckins.map((c) => ({
       date: c.date,
       workoutDone: c.workoutDone,
@@ -461,6 +477,8 @@ export async function createClient(input: NewClientInput): Promise<string | null
     physicianClearedExtendedFasts: input.physicianClearedExtendedFasts ?? false,
     anchorDay: 1,
     treDays: "[3,5]",
+    // standard_24hr never schedules 24h during Basic Training or The Ninety —
+    // getDayType gates on block + month (Month 7+). Do not default to extended_36hr.
     resetVariant: "standard_24hr",
   }).run();
 

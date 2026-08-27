@@ -22,7 +22,7 @@ export default function AddClientPage() {
           <CardHeader>
             <CardTitle>New Client Setup</CardTitle>
             <CardDescription>
-              Create a new client account. Default password is &quot;client-demo&quot; — the client should change it after first login.
+              Start date is Day 1 of The Ninety — not a 90-day-only product. Basic Training is the 14 calendar days before that date. Default password is &quot;client-demo&quot; — the client should change it after first login.
             </CardDescription>
           </CardHeader>
           <CardContent>
