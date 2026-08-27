@@ -1,54 +1,13 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { ArrowRight, Dumbbell, ShieldCheck } from "lucide-react";
-import { Logo } from "@/components/logo";
+import { housePath } from "@/lib/session-config";
 
 export const dynamic = "force-dynamic";
 
 export default async function LandingPage() {
   const session = await getSession();
-  const isLoggedIn = !!session.userId;
-
-  // Logged-in users see the simple link grid (their portal)
-  if (isLoggedIn) {
-    return (
-      <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 py-12 text-center">
-        <Logo size="xl" className="mb-8" />
-        <p className="max-w-xl text-balance text-base text-muted-foreground sm:text-lg">
-          15-month No Excuses Reset. Daily check-in, workouts, and tracking — built
-          for one client, calibrated for tirzepatide + resistance bands + Arizona heat.
-        </p>
-        <div className="mt-10 grid w-full gap-3 sm:grid-cols-2">
-          {session.role === "client" && (
-            <Link href="/app/dashboard" className="group flex items-center justify-between rounded-lg border border-border bg-card p-5 text-left transition-colors hover:border-primary">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Dumbbell className="h-4 w-4 text-primary" />
-                  <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Client view</span>
-                </div>
-                <p className="mt-2 text-lg font-medium">Today&apos;s plan</p>
-                <p className="mt-1 text-sm text-muted-foreground">Workout, walk, hydration, check-in</p>
-              </div>
-              <ArrowRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
-            </Link>
-          )}
-          {session.role === "coach" && (
-            <Link href="/coach" className="group flex items-center justify-between rounded-lg border border-border bg-card p-5 text-left transition-colors hover:border-primary">
-              <div>
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-primary" />
-                  <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Coach view</span>
-                </div>
-                <p className="mt-2 text-lg font-medium">Your roster</p>
-                <p className="mt-1 text-sm text-muted-foreground">All clients, who&apos;s on track, who needs outreach</p>
-              </div>
-              <ArrowRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
-            </Link>
-          )}
-        </div>
-      </main>
-    );
-  }
+  if (session.userId) redirect(housePath(session.role));
 
   // Logged-out users see the full marketing landing page
   return (

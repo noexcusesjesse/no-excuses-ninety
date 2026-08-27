@@ -11,6 +11,11 @@ export interface SessionData {
   email: string;
 }
 
+/** Where a signed-in user lives. Client never sees Staff; Coach roster is unchanged. */
+export function housePath(role: SessionData["role"]): string {
+  return role === "coach" ? "/coach" : "/app/dashboard";
+}
+
 const sessionPassword =
   process.env.SESSION_SECRET ||
   "dev-insecure-session-secret-replace-in-production-32chars";
