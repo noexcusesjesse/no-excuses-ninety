@@ -129,22 +129,28 @@ export async function seedDatabase(): Promise<void> {
     }
 
     const weightRows = [];
-    const weightFrom = startDate <= today ? startDate : historyStart;
-    if (weightFrom <= today) {
-      const spanDays = Math.max(1, diffDays(weightFrom, today));
+    if (startDate <= today) {
+      const spanDays = Math.max(1, diffDays(startDate, today));
       const weeks = Math.max(1, Math.ceil(spanDays / 7));
       for (let w = 1; w <= weeks; w++) {
-        const date = addDays(weightFrom, (w - 1) * 7);
+        const date = addDays(startDate, (w - 1) * 7);
         if (date > today) continue;
         const pct = w / weeks;
         weightRows.push({
           id: randomUUID(), clientId, date,
-          weightLb: Math.round((c.startWeight - (c.startWeight - (c.startWeight - 18)) * pct) * 10) / 10,
+          weightLb: Math.round((c.startWeight - 18 * pct) * 10) / 10,
           waistIn: Math.round((51 - pct * 2) * 10) / 10,
         });
       }
-      if (weightRows.length) db.insert(schema.weights).values(weightRows).run();
+    } else {
+      // Still in Basic Training — baseline only, no fake Ninety-scale loss.
+      weightRows.push({
+        id: randomUUID(), clientId, date: historyStart,
+        weightLb: c.startWeight,
+        waistIn: 51,
+      });
     }
+    if (weightRows.length) db.insert(schema.weights).values(weightRows).run();
     console.log(`  + ${c.name}: start ${startDate}, ${checkinRows.length} check-ins, ${weightRows.length} weights`);
   }
   console.log("\nSeed complete.");
