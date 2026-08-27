@@ -15,7 +15,7 @@ export default async function LandingPage() {
       <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 py-12 text-center">
         <Logo size="xl" className="mb-8" />
         <p className="max-w-xl text-balance text-base text-muted-foreground sm:text-lg">
-          90-Day Reset Protocol. Daily check-in, workouts, and tracking — built
+          15-month No Excuses Reset. Daily check-in, workouts, and tracking — built
           for one client, calibrated for tirzepatide + resistance bands + Arizona heat.
         </p>
         <div className="mt-10 grid w-full gap-3 sm:grid-cols-2">

@@ -1,17 +1,23 @@
 /**
- * Fasting cycle logic — ported from the Reset Regime prototype.
+ * Fasting cycle logic for the No Excuses Reset.
  *
  * Calendar-week-locked cycle: Reset Day + TRE days + overnight fasts.
  * The anchor day cannot also be a TRE day.
  *
- * Physician clearance gate:
- *   - 24h Reset Day: only available if client.physicianClearedExtendedFasts is true
- *   - 36h extended variant: same gate, plus a confirmation step in the UI
- *   - 90-day protocol default: 14:10/16:8 + overnight fasting only
+ * Block + month gates (applied before weekly cycle):
+ *   - Basic Training and The Ninety: overnight + Saturday fasted walk only.
+ *     No 24h, no 36h, no TRE — even if physicianClearedExtendedFasts is true.
+ *   - 24h Reset: Month 7+ of The Build/Mastery, AND physician cleared.
+ *   - 36h: Month 8+, cleared, AND resetVariant === extended_36hr.
+ *   - 72h is retired. LoadLine does not prescribe, dose, or adjust medications.
  *
- * See Specs/fast-cycle-spec.md (originally no-excuses-reset-regime-build-doc.md)
- * for the full design rationale.
+ * See src/lib/program-position.ts for 15-month day math.
  */
+import {
+  isOvernightOnlyBlock,
+  utcDayOfWeek,
+  type ProgramPosition,
+} from "./program-position";
 
 export type FastType =
   | "overnight_12_14"
@@ -47,25 +53,45 @@ export const FAST_TYPE_META: Record<
   pre_12_12: { label: "Pre-Phase (12:12)", targetHours: 12, maxHours: 12, color: "#c99a4b" },
 };
 
+function allows36h(settings: FastingSettings, position: ProgramPosition): boolean {
+  return (
+    settings.physicianClearedExtendedFasts &&
+    settings.resetVariant === "extended_36hr" &&
+    position.extendedFast36hEligibleByMonth
+  );
+}
+
+function allows24h(settings: FastingSettings, position: ProgramPosition): boolean {
+  return (
+    settings.physicianClearedExtendedFasts &&
+    position.extendedFast24hEligibleByMonth
+  );
+}
+
 /**
  * Resolve a date's fast type.
  *
  * Priority:
- * 1. Pre-Phase ramp override (if preRamp is active and date is before targetAnchorDate)
- * 2. Anchor day → reset_24hr (or overnight if not physician-cleared)
- * 3. TRE day → tre_16_8
- * 4. Everything else → overnight_12_14
+ * 1. Basic Training / The Ninety → overnight_12_14 (no 24h/36h/TRE)
+ * 2. Pre-Phase ramp override (Build/Mastery only)
+ * 3. Anchor day → reset_24hr if month-eligible AND physician-cleared; else TRE
+ * 4. TRE day → tre_16_8
+ * 5. Everything else → overnight_12_14
  */
 export function getDayType(
   date: Date,
   settings: FastingSettings,
   preRamp: PreRamp | null,
+  position: ProgramPosition,
 ): FastType {
-  const dateISO = date.toISOString().slice(0, 10);
+  const dateISO = position.asOf || date.toISOString().slice(0, 10);
 
-  // Pre-Phase ramp override
+  if (isOvernightOnlyBlock(position.block) || position.block === "before" || position.block === "complete") {
+    return "overnight_12_14";
+  }
+
+  // Pre-Phase ramp override (never used to sneak 24h into The Ninety)
   if (preRamp && dateISO < preRamp.targetAnchorDate) {
-    // The day immediately before the target anchor date → 12:12
     const dayBeforeTarget = new Date(preRamp.targetAnchorDate + "T00:00:00");
     dayBeforeTarget.setDate(dayBeforeTarget.getDate() - 1);
     if (dateISO === dayBeforeTarget.toISOString().slice(0, 10)) {
@@ -74,18 +100,12 @@ export function getDayType(
     return "pre_14_10";
   }
 
-  // On or after target anchor date → fall through to normal weekly cycle
-  // (the preRamp should have been cleared by clearExpiredRamp, but this
-  // is a safety net)
-
-  const dow = date.getDay(); // 0=Sun...6=Sat
+  const dow = utcDayOfWeek(dateISO);
 
   if (dow === settings.anchorDay) {
-    // Reset Day — but only if physician-cleared for extended fasts
-    if (settings.physicianClearedExtendedFasts) {
+    if (allows24h(settings, position)) {
       return "reset_24hr";
     }
-    // Not cleared — downgrade to a longer overnight fast (16h)
     return "tre_16_8";
   }
 
@@ -97,14 +117,21 @@ export function getDayType(
 }
 
 /**
- * Get target hours for a fast type, respecting the reset variant.
+ * Get target hours for a fast type.
+ * 36h only when Month 8+, cleared, and resetVariant is extended_36hr.
  */
 export function getTargetHours(
   type: FastType,
   settings: FastingSettings,
+  position?: ProgramPosition,
 ): number {
   if (type === "reset_24hr") {
-    return settings.resetVariant === "extended_36hr" ? 36 : 24;
+    if (position && allows36h(settings, position)) return 36;
+    if (!position && settings.resetVariant === "extended_36hr" && settings.physicianClearedExtendedFasts) {
+      // Callers should pass position. Without it, never upgrade to 36h.
+      return 24;
+    }
+    return 24;
   }
   return FAST_TYPE_META[type].targetHours;
 }
@@ -115,9 +142,11 @@ export function getTargetHours(
 export function getMaxHours(
   type: FastType,
   settings: FastingSettings,
+  position?: ProgramPosition,
 ): number {
   if (type === "reset_24hr") {
-    return settings.resetVariant === "extended_36hr" ? 36 : 24;
+    if (position && allows36h(settings, position)) return 36;
+    return 24;
   }
   return FAST_TYPE_META[type].maxHours;
 }
@@ -240,15 +269,16 @@ export function getDayTypeLabel(
   date: Date,
   settings: FastingSettings,
   preRamp: PreRamp | null,
+  position: ProgramPosition,
 ): { type: FastType; label: string; color: string } {
-  const type = getDayType(date, settings, preRamp);
+  const type = getDayType(date, settings, preRamp, position);
   const meta = FAST_TYPE_META[type];
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const dayName = dayNames[date.getDay()];
+  const dayName = dayNames[utcDayOfWeek(position.asOf)];
+  const hours = getTargetHours(type, settings, position);
 
   if (type === "reset_24hr") {
-    const hours = settings.resetVariant === "extended_36hr" ? "36h" : "24h";
-    return { type, label: `${dayName} · Reset Day (${hours})`, color: meta.color };
+    return { type, label: `${dayName} · Reset Day (${hours}h)`, color: meta.color };
   }
   if (type === "tre_16_8") {
     return { type, label: `${dayName} · 16:8 TRE`, color: meta.color };

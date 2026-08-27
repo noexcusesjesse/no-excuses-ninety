@@ -10,6 +10,7 @@ import {
   type FastingSettings,
   type FastType,
 } from "@/lib/fast-cycle";
+import { getProgramPosition, todayISODate } from "@/lib/program-position";
 
 export const dynamic = "force-dynamic";
 
@@ -37,11 +38,12 @@ export async function GET() {
     physicianClearedExtendedFasts: client.physicianClearedExtendedFasts ?? false,
   };
 
-  const today = new Date();
-  const { type, label, color } = getDayTypeLabel(today, settings, null);
+  const todayISO = todayISODate();
+  const today = new Date(`${todayISO}T12:00:00Z`);
+  const position = getProgramPosition(client.startDate, todayISO);
+  const { type, label, color } = getDayTypeLabel(today, settings, null, position);
 
   // Check for active fast today
-  const todayISO = today.toISOString().slice(0, 10);
   const activeFast = db.select().from(schema.dailyCheckins)
     .where(and(
       eq(schema.dailyCheckins.clientId, clientId),
@@ -56,8 +58,8 @@ export async function GET() {
     fastType: type,
     label,
     color,
-    targetHours: getTargetHours(type, settings),
-    maxHours: getMaxHours(type, settings),
+    targetHours: getTargetHours(type, settings, position),
+    maxHours: getMaxHours(type, settings, position),
     isActive: !!isActive,
     activeStartMs: activeFast?.fastStartMs ?? null,
     activeElapsedMs: isActive ? Date.now() - (activeFast?.fastStartMs ?? 0) : null,
@@ -80,7 +82,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { action } = body as { action: "start" | "end" };
 
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = todayISODate();
 
   // Find or create today's check-in
   const checkin = db.select().from(schema.dailyCheckins)
@@ -103,8 +105,9 @@ export async function POST(req: NextRequest) {
     physicianClearedExtendedFasts: client.physicianClearedExtendedFasts ?? false,
   };
 
-  const today = new Date();
-  const fastType: FastType = getDayType(today, settings, null);
+  const today = new Date(`${todayISO}T12:00:00Z`);
+  const position = getProgramPosition(client.startDate, todayISO);
+  const fastType: FastType = getDayType(today, settings, null, position);
 
   if (action === "start") {
     const nowMs = Date.now();

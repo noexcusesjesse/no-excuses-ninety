@@ -1,6 +1,6 @@
 /**
- * Meal theme rotation — 6 themes × 5 days = 30-day cycle.
- * Each 30-day cycle moves through every theme exactly once.
+ * Meal theme rotation — 6 themes × 5 days = 30-day protocol month.
+ * Each 30-day month moves through every theme exactly once.
  *
  * From the build brief (Specs/app-build-brief.md §4):
  *   themeIndex = floor(daysSinceCycleStart / 5) mod 6

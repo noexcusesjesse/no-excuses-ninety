@@ -1,4 +1,5 @@
 import { loginAction } from "../actions";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ export default function LoginPage() {
             No Excuses
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-            Ninety
+            Reset
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Sign in to your account
@@ -24,10 +25,8 @@ export default function LoginPage() {
             const email = formData.get("email") as string;
             const password = formData.get("password") as string;
             const result = await loginAction(email, password);
-            if (result.error) {
-              // TODO: show error in UI — for now redirect to login with error
-              // We can't easily pass error back without client component.
-              // For a prototype, the inline server action handles it.
+            if (!result.error) {
+              redirect("/");
             }
           }}
           className="space-y-4"

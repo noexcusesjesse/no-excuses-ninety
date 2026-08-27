@@ -1,20 +1,20 @@
 /**
- * No Excuses Ninety — DB schema (Drizzle + SQLite)
+ * No Excuses Reset Program — DB schema (Drizzle + SQLite)
  *
  * Tables:
  *   coaches       — accounts that own client rosters
  *   clients       — the people being coached (1 coach owns many)
- *   program_days  — the 90-day program template (Day 1-90, A/B/rest, phase, deload)
+ *   program_days  — The Ninety template (Day 1-90, A/B/rest, phase, deload)
  *   daily_checkins — one row per client per day: workout, walk, mood, energy, sleep, protein, hydration, fasting
  *   weights       — weekly weight log (separate from daily because cadence is weekly not daily)
  *   audit_log     — coach actions (notes, band adjustments, etc.)
  *
- * Phase 1 (Sprint 1) ships daily_checkins + weights + coaches/clients.
- * program_days seeds the 90-day template the client UI renders against.
- * audit_log starts empty — wired in Sprint 2.
+ * 15-month program position is computed from clients.startDate (Day 1 of The Ninety)
+ * in src/lib/program-position.ts — not stored as extra rows. Basic Training is the
+ * 14 days before startDate. program_days stays 1–90 for The Ninety only.
  *
  * Phase 2 additions:
- *   - clients.physicianClearedExtendedFasts — gates 24h/36h fast options
+ *   - clients.physicianClearedExtendedFasts — required for 24h/36h, still gated by month
  *   - clients.anchorDay / treDays / resetVariant — per-client fasting settings
  *   - daily_checkins.fastType / fastStartMs / fastEndMs / fastDurationMs — fasting log
  */
@@ -39,7 +39,7 @@ export const clients = sqliteTable("clients", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
-  /** Start date of the 90-day program (ISO date "YYYY-MM-DD"). */
+  /** Day 1 of The Ninety (ISO "YYYY-MM-DD"). Basic Training is the 14 days before this date. */
   startDate: text("start_date").notNull(),
   /** Start weight in lbs. */
   startWeightLb: real("start_weight_lb").notNull(),
@@ -55,7 +55,7 @@ export const clients = sqliteTable("clients", {
   anchorDay: integer("anchor_day").notNull().default(1),
   /** TRE days as JSON array string, e.g. "[3,5]" for Wed+Fri. */
   treDays: text("tre_days").notNull().default("[3,5]"),
-  /** Reset day variant: "standard_24hr" or "extended_36hr". */
+  /** Reset day variant: "standard_24hr" or "extended_36hr". Month-gated (24h from month 7, 36h from month 8). */
   resetVariant: text("reset_variant").notNull().default("standard_24hr"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
@@ -63,11 +63,11 @@ export const clients = sqliteTable("clients", {
 });
 
 /**
- * program_days — the 90-day template.
- * Seeded once at deploy time. Each row says what Day N of the program is.
+ * program_days — The Ninety template (days 1–90).
+ * Seeded once at deploy time. Position after Day 90 is computed in program-position.ts
+ * and does not require extra workout rows.
  * Days 1-30 = Foundation, 31-60 = Build, 61-90 = Identity.
- * Deload weeks at 4, 8, 12 (week starts at day 1, 8, 15, 22, 29, 36, 43, 50, 57, 64, 71, 78, 85).
- * Workout alternates A/B every other week (Mon/Wed/Fri).
+ * Deload weeks at 4, 8, 12.
  */
 export const programDays = sqliteTable("program_days", {
   /** Day number, 1-90. */

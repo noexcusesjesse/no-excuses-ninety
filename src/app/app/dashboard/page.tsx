@@ -4,6 +4,13 @@ import { Stat, MoodPicker } from "@/app/client/_components";
 import { FastingCard } from "@/app/client/fasting-card";
 import { getClientToday, type WorkoutLetter } from "@/db/queries";
 import { getMealTheme } from "@/lib/meal-themes";
+import {
+  blockLabel,
+  formatPositionKicker,
+  formatPositionSecondary,
+  journeyProgress,
+  mealThemeDayIndex,
+} from "@/lib/program-position";
 import { Beef, Check, Circle, Dumbbell, Droplet, Footprints, Moon } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +40,16 @@ export default async function DashboardPage() {
   const exercises = getWorkout(client.plan.workout);
   const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const weekDone = [true, true, true, true, false, false];
-  const theme = getMealTheme(client.programDay - 1);
+  const theme = getMealTheme(mealThemeDayIndex(client.position));
+  const pos = client.position;
+  const journey = journeyProgress(pos);
+  const secondary = formatPositionSecondary(pos);
+  const blockTitle = blockLabel(pos.block);
+  const metaLine =
+    pos.block === "basicTraining" ? `Day ${pos.dayInBlock}/${pos.daysInBlock}`
+    : pos.block === "ninety" ? `Wk ${pos.ninetyWeek}/13`
+    : pos.programMonth ? `Month ${pos.programMonth}/15`
+    : null;
 
   return (
     <>
@@ -41,23 +57,28 @@ export default async function DashboardPage() {
         <div className="flex items-baseline justify-between">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              {client.plan.dayLabel} · Day {client.programDay} of 90
+              {formatPositionKicker(pos, client.plan.dayLabel)}
             </p>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">
               Good morning, {client.name}.
             </h1>
+            {secondary && (
+              <p className="mt-1 text-sm text-muted-foreground">{secondary}</p>
+            )}
           </div>
           <div className="hidden text-right sm:block">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Phase</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Block</p>
             <p className="text-sm font-semibold">
-              {client.phase}
-              <span className="ml-2 font-mono text-xs text-muted-foreground">Wk {client.weekNumber}/13</span>
+              {blockTitle}
+              {metaLine && (
+                <span className="ml-2 font-mono text-xs text-muted-foreground">{metaLine}</span>
+              )}
             </p>
           </div>
         </div>
       </section>
 
-      {/* Journey ring */}
+      {/* Journey ring — 15-month Reset, not a 90-day-only identity */}
       <Card className="mb-6">
         <CardContent className="flex items-center gap-6 pt-6">
           <div className="relative flex h-24 w-24 shrink-0 items-center justify-center">
@@ -66,20 +87,34 @@ export default async function DashboardPage() {
               <circle
                 cx="48" cy="48" r="42" fill="none" stroke="hsl(var(--primary))" strokeWidth="5" strokeLinecap="round"
                 strokeDasharray={2 * Math.PI * 42}
-                strokeDashoffset={2 * Math.PI * 42 * (1 - Math.min(1, (client.programDay - 1) / 90))}
+                strokeDashoffset={2 * Math.PI * 42 * (1 - Math.min(1, journey.percent / 100))}
                 style={{ transition: "stroke-dashoffset 0.5s ease" }}
               />
             </svg>
             <div className="absolute flex flex-col items-center">
-              <span className="font-mono text-xl font-bold tabular-nums">{Math.round(((client.programDay - 1) / 90) * 100)}%</span>
-              <span className="font-mono text-[9px] text-muted-foreground">JOURNEY</span>
+              <span className="font-mono text-xl font-bold tabular-nums">{journey.percent}%</span>
+              <span className="font-mono text-[9px] text-muted-foreground">{journey.label}</span>
             </div>
           </div>
           <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4">
-            <div><p className="font-mono text-[10px] uppercase text-muted-foreground">Current</p><p className="font-mono text-lg font-semibold tabular-nums">{client.physicianClearedExtendedFasts ? "—" : "—"}lb</p></div>
-            <div><p className="font-mono text-[10px] uppercase text-muted-foreground">Lost</p><p className="font-mono text-lg font-semibold text-success tabular-nums">—</p></div>
-            <div><p className="font-mono text-[10px] uppercase text-muted-foreground">Goal</p><p className="font-mono text-lg font-semibold tabular-nums">—</p></div>
-            <div><p className="font-mono text-[10px] uppercase text-muted-foreground">Remaining</p><p className="font-mono text-lg font-semibold tabular-nums">—</p></div>
+            <div>
+              <p className="font-mono text-[10px] uppercase text-muted-foreground">Block</p>
+              <p className="text-sm font-semibold leading-tight">{blockTitle}</p>
+            </div>
+            <div>
+              <p className="font-mono text-[10px] uppercase text-muted-foreground">Month</p>
+              <p className="font-mono text-lg font-semibold tabular-nums">
+                {pos.programMonth ? `${pos.programMonth}/15` : "Pre-Day 1"}
+              </p>
+            </div>
+            <div>
+              <p className="font-mono text-[10px] uppercase text-muted-foreground">Current</p>
+              <p className="font-mono text-lg font-semibold tabular-nums">—lb</p>
+            </div>
+            <div>
+              <p className="font-mono text-[10px] uppercase text-muted-foreground">Lost</p>
+              <p className="font-mono text-lg font-semibold text-success tabular-nums">—</p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -109,7 +144,9 @@ export default async function DashboardPage() {
             <div>
               <CardTitle>Today · Workout {client.plan.workout}</CardTitle>
               <CardDescription className="mt-1">
-                {client.plan.isDeload ? "Deload week — 1 round, lightest bands" : "2 rounds · rest 45–75s between sets"}
+                {pos.block === "basicTraining"
+                  ? "Habit loop — show up. Walk, protein, sleep. No extended fasts."
+                  : client.plan.isDeload ? "Deload week — 1 round, lightest bands" : "2 rounds · rest 45–75s between sets"}
               </CardDescription>
             </div>
             <Button size="lg" className="shadow-glow"><Dumbbell className="h-4 w-4" />Start workout</Button>
@@ -186,7 +223,18 @@ export default async function DashboardPage() {
       </section>
 
       <Card className="mt-6">
-        <CardHeader><CardTitle>This week</CardTitle><CardDescription>Wk {client.weekNumber} of 13</CardDescription></CardHeader>
+        <CardHeader>
+          <CardTitle>This week</CardTitle>
+          <CardDescription>
+            {pos.block === "ninety" && pos.ninetyWeek
+              ? `The Ninety · Wk ${pos.ninetyWeek} of 13`
+              : pos.block === "basicTraining"
+                ? "Basic Training · 14-day runway"
+                : pos.programMonth
+                  ? `${blockTitle} · Month ${pos.programMonth} of 15`
+                  : blockTitle}
+          </CardDescription>
+        </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
             {weekDays.map((d, i) => (

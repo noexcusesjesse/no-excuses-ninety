@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getClientToday, getCycleData } from "@/db/queries";
 import { CoachChat } from "./coach-chat";
+import { formatPositionKicker, formatPositionSecondary } from "@/lib/program-position";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function CoachPage() {
     programDay: client.programDay,
     phase: client.phase,
     weekNumber: client.weekNumber,
+    block: client.position.block,
     proteinToday: client.proteinToday,
     proteinTarget: client.proteinTarget,
     hydrationOz: client.hydrationOz,
@@ -39,9 +41,12 @@ export default async function CoachPage() {
     <>
       <div className="mb-6">
         <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          {client.plan.dayLabel} · Day {client.programDay} of 90
+          {formatPositionKicker(client.position, client.plan.dayLabel)}
         </p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Coach</h1>
+        {formatPositionSecondary(client.position) && (
+          <p className="mt-1 text-sm text-muted-foreground">{formatPositionSecondary(client.position)}</p>
+        )}
         <p className="mt-2 text-sm text-muted-foreground">Data-grounded AI coach. Knows your numbers, not your diagnosis.</p>
       </div>
 
