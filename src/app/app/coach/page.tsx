@@ -1,41 +1,19 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getClientToday, getCycleData } from "@/db/queries";
-import { CoachChat } from "./coach-chat";
+import { getClientOwnThread, getProgramNotices } from "@/db/messages";
+import { MessageThread } from "@/components/message-thread";
+import { ProgramNotices } from "@/components/program-notices";
 import { formatPositionKicker, formatPositionSecondary } from "@/lib/program-position";
+import { getClientToday } from "@/db/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function CoachPage() {
   const client = await getClientToday();
-  const cycle = await getCycleData();
-  if (!client || !cycle) return <div className="py-12 text-center text-muted-foreground">Not signed in as a client.</div>;
-
-  // Build context summary for the AI coach
-  const context = {
-    name: client.name,
-    programDay: client.programDay,
-    phase: client.phase,
-    weekNumber: client.weekNumber,
-    block: client.position.block,
-    proteinToday: client.proteinToday,
-    proteinTarget: client.proteinTarget,
-    hydrationOz: client.hydrationOz,
-    stepsToday: client.stepsToday,
-    sleepHours: client.sleepHours,
-    cpapHours: client.cpapHours,
-    mood: client.mood,
-    energy: client.energy,
-    cycle: {
-      startWeight: cycle.startWeight,
-      currentWeight: cycle.currentWeight,
-      weightChange: cycle.weightChange,
-      avgProtein: cycle.avgProtein,
-      avgSteps: cycle.avgSteps,
-      exerciseSessions: cycle.exerciseSessions,
-      proteinAdherencePct: cycle.proteinAdherencePct,
-      stepsAdherencePct: cycle.stepsAdherencePct,
-    },
-  };
+  const thread = await getClientOwnThread();
+  const notices = await getProgramNotices();
+  if (!client || !thread) {
+    return <div className="py-12 text-center text-muted-foreground">Not signed in as a client.</div>;
+  }
 
   return (
     <>
@@ -47,31 +25,41 @@ export default async function CoachPage() {
         {formatPositionSecondary(client.position) && (
           <p className="mt-1 text-sm text-muted-foreground">{formatPositionSecondary(client.position)}</p>
         )}
-        <p className="mt-2 text-sm text-muted-foreground">Data-grounded AI coach. Knows your numbers, not your diagnosis.</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Message {thread.coachName} here. This is your assigned coach — not an AI, and not Staff.
+        </p>
       </div>
 
-      <Card>
+      <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Chat with your coach</CardTitle>
-          <CardDescription>
-            This coach only knows your logged data. It never gives medication advice, diagnoses, or guarantees.
-          </CardDescription>
+          <CardTitle>Program</CardTitle>
+          <CardDescription>From LoadLine. Not a Staff portal.</CardDescription>
         </CardHeader>
         <CardContent>
-          <CoachChat contextData={context} />
+          <ProgramNotices notices={notices} />
         </CardContent>
       </Card>
 
-      <div className="mt-6 rounded-md border border-border bg-muted/30 p-4 text-xs text-muted-foreground">
-        <p className="font-semibold">Safety rules:</p>
-        <ul className="mt-2 list-inside list-disc space-y-1">
-          <li>Never gives medication dosing, timing, or schedule advice — see your prescribing clinician</li>
-          <li>Never diagnoses or interprets symptoms, labs, or vitals</li>
-          <li>Never recommends extreme or drastic calorie restriction</li>
-          <li>Never guarantees results or promises a specific date</li>
-          <li>Keep replies short (2-4 sentences) unless more detail is clearly wanted</li>
-        </ul>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Thread with {thread.coachName}</CardTitle>
+          <CardDescription>1:1 with your assigned coach only.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <MessageThread
+            clientId={thread.clientId}
+            selfRole="client"
+            coachName={thread.coachName}
+            clientName={thread.clientName}
+            initialMessages={thread.messages}
+            canSend={thread.canSend}
+          />
+        </CardContent>
+      </Card>
+
+      <p className="mt-6 text-center font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+        LoadLine does not prescribe, dose, or adjust medications.
+      </p>
     </>
   );
 }

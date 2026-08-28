@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getClientDetail, getDaysAgoLabel } from "@/db/queries";
 import { formatDateShort, formatDayInBlock } from "@/lib/program-position";
+import { getAssignedThread } from "@/db/messages";
+import { MessageThread } from "@/components/message-thread";
 import { ArrowLeft, Download, TrendingDown, TrendingUp } from "lucide-react";
 import { NotesPanel } from "./notes-panel";
 import { BandCalibrationPanel } from "./band-calibration-panel";
@@ -13,6 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ClientDetailPage({ params }: { params: { clientId: string } }) {
   const detail = await getClientDetail(params.clientId);
+  const thread = detail ? await getAssignedThread(params.clientId) : null;
 
   if (!detail) {
     return (
@@ -198,6 +201,27 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
           </Card>
         )}
 
+        {/* Messages — same 1:1 as the client Coach tab */}
+        {thread && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Messages</CardTitle>
+              <CardDescription>1:1 with {detail.name}. Staff is not in this thread.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <MessageThread
+                clientId={thread.clientId}
+                selfRole="coach"
+                coachName={thread.coachName}
+                clientName={thread.clientName}
+                initialMessages={thread.messages}
+                canSend={thread.canSend}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Coach notes */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Coach Notes</CardTitle>
