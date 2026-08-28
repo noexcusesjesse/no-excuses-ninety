@@ -56,6 +56,47 @@ function isoDaysAgo(days: number): string {
 }
 function weekOf(day: number): number { return Math.ceil(day / 7); }
 
+function seedMessagingIfNeeded(): void {
+  const staff = db.select().from(schema.staffs).where(sql`email = ${STAFF_EMAIL}`).get();
+  const coach = db.select().from(schema.coaches).where(sql`email = ${COACH_EMAIL}`).get();
+  const marcus = db.select().from(schema.clients).where(sql`email = ${"marcus@example.com"}`).get();
+
+  const existingBlast = db.select().from(schema.broadcasts).limit(1).get();
+  if (staff && !existingBlast) {
+    db.insert(schema.broadcasts).values({
+      id: randomUUID(),
+      staffId: staff.id,
+      audience: "all",
+      body: "Welcome to the No Excuses Reset Program. Program updates from LoadLine show up here. Your 1:1 with your assigned coach is a separate thread — Staff is not in it.",
+    }).run();
+    console.log("  + Program broadcast (all users)");
+  }
+
+  if (coach && marcus) {
+    const existingThread = db.select().from(schema.threadMessages)
+      .where(sql`client_id = ${marcus.id}`).limit(1).get();
+    if (!existingThread) {
+      db.insert(schema.threadMessages).values([
+        {
+          id: randomUUID(),
+          coachId: coach.id,
+          clientId: marcus.id,
+          senderRole: "coach",
+          body: "Welcome, Marcus. This thread is just you and me — not an AI. Log your days and message me here if you get stuck.",
+        },
+        {
+          id: randomUUID(),
+          coachId: coach.id,
+          clientId: marcus.id,
+          senderRole: "client",
+          body: "Got it. See you on Day 1.",
+        },
+      ]).run();
+      console.log("  + 1:1 thread for Marcus Johnson");
+    }
+  }
+}
+
 function seedStaffIfNeeded(): void {
   const existingStaff = db.select().from(schema.staffs).where(sql`email = ${STAFF_EMAIL}`).get();
   if (existingStaff) {
@@ -80,6 +121,7 @@ export async function seedDatabase(): Promise<void> {
   if (existing) {
     console.log(`Coach ${COACH_EMAIL} already exists. Skipping coach/client seed.`);
     console.log(`(run 'npm run db:reset' to wipe + reseed)`);
+    seedMessagingIfNeeded();
     console.log(`Staff login: ${STAFF_EMAIL} / ${STAFF_PASSWORD}`);
     return;
   }
@@ -175,6 +217,9 @@ export async function seedDatabase(): Promise<void> {
     if (weightRows.length) db.insert(schema.weights).values(weightRows).run();
     console.log(`  + ${c.name}: start ${startDate}, ${checkinRows.length} check-ins, ${weightRows.length} weights`);
   }
+
+  seedMessagingIfNeeded();
+
   console.log("\nSeed complete.");
   console.log(`Staff login:  ${STAFF_EMAIL} / ${STAFF_PASSWORD}`);
   console.log(`Coach login:  ${COACH_EMAIL} / ${COACH_PASSWORD}`);

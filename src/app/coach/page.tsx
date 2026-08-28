@@ -9,6 +9,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getCoachClients, getDaysAgoLabel, type CoachClientRow } from "@/db/queries";
+import { getProgramNotices } from "@/db/messages";
+import { ProgramNotices } from "@/components/program-notices";
 import {
   Bell,
   ChevronRight,
@@ -81,6 +83,7 @@ function ClientRow({ c }: { c: CoachClientRow }) {
 
 export default async function CoachDashboardPage() {
   const clients = await getCoachClients();
+  const notices = await getProgramNotices();
   const onTrack = clients.filter((c) => c.status === "on-track").length;
   const slipping = clients.filter((c) => c.status === "slipping").length;
   const off = clients.filter((c) => c.status === "off").length;
@@ -145,6 +148,16 @@ export default async function CoachDashboardPage() {
             <p className="text-xs text-muted-foreground">Need outreach</p>
           </div>
         </section>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Program</CardTitle>
+            <CardDescription>From LoadLine. Open a client file to use the 1:1 thread — Staff is not in those threads.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ProgramNotices notices={notices} />
+          </CardContent>
+        </Card>
 
         <Card className="mb-6">
           <CardHeader>

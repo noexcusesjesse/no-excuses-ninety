@@ -9,6 +9,8 @@
  *   daily_checkins — one row per client per day: workout, walk, mood, energy, sleep, protein, hydration, fasting
  *   weights       — weekly weight log (separate from daily because cadence is weekly not daily)
  *   audit_log     — coach actions (notes, band adjustments, etc.)
+ *   thread_messages — assigned coach ↔ client 1:1 (Staff is never a participant)
+ *   broadcasts    — Staff program blasts (shown as LoadLine, not Staff)
  *
  * 15-month program position is computed from clients.startDate (Day 1 of The Ninety)
  * in src/lib/program-position.ts — not stored as extra rows. Basic Training is the
@@ -179,6 +181,39 @@ export const auditLog = sqliteTable("audit_log", {
     .default(sql`(unixepoch())`),
 });
 
+/**
+ * Assigned-coach 1:1 only. senderRole is "coach" | "client" — never staff.
+ * A coach may only write if clients.coach_id matches.
+ */
+export const threadMessages = sqliteTable("thread_messages", {
+  id: text("id").primaryKey(),
+  coachId: text("coach_id")
+    .notNull()
+    .references(() => coaches.id, { onDelete: "cascade" }),
+  clientId: text("client_id")
+    .notNull()
+    .references(() => clients.id, { onDelete: "cascade" }),
+  senderRole: text("sender_role").notNull(),
+  body: text("body").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
+/** Staff program blast. Recipients see "LoadLine", not Staff. */
+export const broadcasts = sqliteTable("broadcasts", {
+  id: text("id").primaryKey(),
+  staffId: text("staff_id")
+    .notNull()
+    .references(() => staffs.id, { onDelete: "cascade" }),
+  /** "all" | "clients" | "coaches" */
+  audience: text("audience").notNull(),
+  body: text("body").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
 export type Coach = typeof coaches.$inferSelect;
 export type NewCoach = typeof coaches.$inferInsert;
 export type Staff = typeof staffs.$inferSelect;
@@ -191,3 +226,5 @@ export type NewDailyCheckin = typeof dailyCheckins.$inferInsert;
 export type Weight = typeof weights.$inferSelect;
 export type NewWeight = typeof weights.$inferInsert;
 export type AuditLog = typeof auditLog.$inferSelect;
+export type ThreadMessageRow = typeof threadMessages.$inferSelect;
+export type BroadcastRow = typeof broadcasts.$inferSelect;

@@ -7,6 +7,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getDaysAgoLabel, getStaffOps, type StaffClientRow } from "@/db/queries";
+import { getStaffBroadcasts } from "@/db/messages";
+import { BroadcastComposer } from "@/components/broadcast-composer";
 import { openAsClientAction, openAsCoachAction } from "./actions";
 import { ClipboardList, ShieldAlert, UserRound, Users } from "lucide-react";
 
@@ -105,6 +107,7 @@ function ClientOpsRow({ c }: { c: StaffClientRow }) {
 
 export default async function StaffHousePage() {
   const ops = await getStaffOps();
+  const broadcasts = await getStaffBroadcasts();
   if (!ops) {
     return <p className="py-12 text-center text-muted-foreground">Staff session required.</p>;
   }
@@ -128,6 +131,18 @@ export default async function StaffHousePage() {
           This is not a daily log. Open a client or coach view on purpose to see their house.
         </p>
       </section>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Program broadcast</CardTitle>
+          <CardDescription>
+            All users, clients only, or coaches only. Recipients see LoadLine, not Staff. Staff is not in 1:1 coach–client threads.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BroadcastComposer initial={broadcasts} />
+        </CardContent>
+      </Card>
 
       <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-md border border-border bg-card p-3">
