@@ -14,8 +14,8 @@ export async function middleware(req: NextRequest) {
   const isProtected =
     pathname.startsWith("/client") ||
     pathname.startsWith("/coach") ||
-    pathname.startsWith("/app") ||
-    pathname.startsWith("/staff");
+    pathname.startsWith("/staff") ||
+    pathname.startsWith("/app"); // legacy client URLs; next.config redirects them
   if (!isProtected) return NextResponse.next();
 
   const session = await getSession(req);
@@ -35,7 +35,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL(home, req.url));
   }
 
-  if ((pathname.startsWith("/client") || pathname.startsWith("/app")) && session.role !== "client") {
+  const isClientHouse =
+    pathname.startsWith("/client") || pathname.startsWith("/app");
+  if (isClientHouse && session.role !== "client") {
     return NextResponse.redirect(new URL(home, req.url));
   }
 
@@ -43,5 +45,14 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/client/:path*", "/coach/:path*", "/app/:path*", "/staff/:path*"],
+  matcher: [
+    "/client",
+    "/client/:path*",
+    "/coach",
+    "/coach/:path*",
+    "/staff",
+    "/staff/:path*",
+    "/app",
+    "/app/:path*",
+  ],
 };

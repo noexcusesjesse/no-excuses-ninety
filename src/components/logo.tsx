@@ -2,7 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * No Excuses Ninety brand logo.
+ * No Excuses Reset Program brand logo.
  * Mirrors the canonical lockup: typographic stack on black, red bar/ribbon divider.
  * No resistance-band icon — the brand mark IS the typographic stack.
  *
@@ -67,7 +67,7 @@ export function Logo({ size = "md", showTagline = true, className, ...props }: L
       height={h}
       className={cn("shrink-0", className)}
       role="img"
-      aria-label="No Excuses Ninety — 90-Day Reset Protocol"
+      aria-label="No Excuses Reset Program"
       {...props}
     >
       <defs>
@@ -76,8 +76,8 @@ export function Logo({ size = "md", showTagline = true, className, ...props }: L
           <stop offset="0%" stopColor="#FFFFFF" />
           <stop offset="100%" stopColor="#D4D4D8" />
         </linearGradient>
-        {/* Slightly darker gradient for "NINETY" to add depth */}
-        <linearGradient id="ninety-grad" x1="0" y1="0" x2="0" y2="1">
+        {/* Slightly darker gradient for "RESET" to add depth */}
+        <linearGradient id="reset-grad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#F4F4F5" />
           <stop offset="100%" stopColor="#A1A1AA" />
         </linearGradient>
@@ -117,7 +117,7 @@ export function Logo({ size = "md", showTagline = true, className, ...props }: L
         opacity="0.7"
       />
 
-      {/* NINETY — bottom, heavy weight, the visual anchor */}
+      {/* RESET — bottom, heavy weight, the visual anchor */}
       <text
         x="160"
         y="220"
@@ -125,10 +125,10 @@ export function Logo({ size = "md", showTagline = true, className, ...props }: L
         fontFamily="Inter, system-ui, sans-serif"
         fontWeight="900"
         fontSize="96"
-        fill="url(#ninety-grad)"
+        fill="url(#reset-grad)"
         letterSpacing="-3"
       >
-        NINETY
+        RESET
       </text>
 
       {/* Tagline — small monospace */}
@@ -143,7 +143,7 @@ export function Logo({ size = "md", showTagline = true, className, ...props }: L
           fill="#D4D4D8"
           letterSpacing="3"
         >
-          90-DAY RESET PROTOCOL
+          15-MONTH RESET PROGRAM
         </text>
       )}
     </svg>

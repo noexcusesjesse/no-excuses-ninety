@@ -1,8 +1,14 @@
-# No Excuses Ninety
+# No Excuses Reset Program
 
-90-Day Reset Protocol — daily check-in, workouts, and tracking.
+Daily check-in, workouts, and tracking for the LoadLine Fitness **No Excuses Reset Program** (15-month Reset + Basic Training). One Next.js app, three role houses:
 
-Built for the Loadline Fitness client program: tirzepatide-aware, resistance-band-only, calibrated for Arizona heat. One app, two surfaces: **client view** and **coach view**.
+| Role | Home | What it is |
+|------|------|------------|
+| **Client** | `/client` | Daily house — dashboard, log, progress, month, assigned-coach thread |
+| **Coach** | `/coach` | Roster and client files |
+| **Staff** | `/staff` | Program ops (broadcasts, clearance, missing logs). **Client never sees Staff.** |
+
+The Ninety is a block inside the 15-month Reset (days 1–90), not the product name. Fasting: overnight in Basic Training and The Ninety; 24h from Month 7 and 36h from Month 8, both physician-gated. LoadLine does not prescribe, dose, or adjust medications.
 
 ## Tech stack
 
@@ -10,8 +16,7 @@ Built for the Loadline Fitness client program: tirzepatide-aware, resistance-ban
 - **shadcn-style** primitives (hand-rolled; no shadcn CLI install)
 - **Inter** + **JetBrains Mono** via `next/font/google`
 - **Lucide React** icons (pinned to 0.460+)
-- **Postgres** via `DATABASE_URL` (Drizzle + postgres.js). Railway uses the existing Postgres plugin — no SQLite volume.
-- **@react-pdf/renderer** for client PDF export (Sprint 1)
+- **Postgres** via `DATABASE_URL` (Drizzle + postgres.js)
 
 ## Local development
 
@@ -25,46 +30,37 @@ npm run build        # production build
 npm run start        # serve production build
 ```
 
-Requires **Node 22**.
+Requires **Node 22**. Demo logins after seed: `staff@loadlinefitness.com` / `staff-demo`, `coach@loadlinefitness.com` / `loadline-demo`, `marcus@example.com` / `client-demo`.
 
 ## Project structure
 
 ```
 src/
 ├── app/
-│   ├── page.tsx           # Landing — routes to client or coach
-│   ├── client/page.tsx    # Client dashboard (today's plan)
-│   ├── coach/page.tsx     # Coach dashboard (roster, needs attention)
-│   ├── layout.tsx         # Root layout, fonts
-│   └── globals.css        # Design tokens (HSL CSS variables)
-├── components/
-│   ├── ui/                # Button, Card primitives (cva)
-│   └── app-header.tsx     # Shared top nav
+│   ├── page.tsx             # Marketing landing → housePath(role) if signed in
+│   ├── login/               # Shared login
+│   ├── client/              # Client house (/client)
+│   ├── coach/               # Coach house (/coach)
+│   ├── staff/               # Staff house (/staff)
+│   └── api/                 # health, fasting, coach, messages
+├── components/              # Header, client tab nav, UI primitives
+├── db/                      # Drizzle schema, queries, seed
 └── lib/
-    ├── utils.ts           # cn() helper
-    └── mock-data.ts       # Sprint 0 fixtures
+    ├── session-config.ts    # housePath + iron-session (Edge-safe)
+    ├── auth.ts              # Node auth (staff → coach → client)
+    └── program-position.ts  # 15-month day math + fasting month gates
 ```
+
+Old `/app/*` URLs redirect into `/client` (see `next.config.mjs`).
 
 ## Design tokens
 
 All colors live in `globals.css` as HSL CSS variables and are mapped to Tailwind tokens in `tailwind.config.ts`. No hex literals in components. Brand red is reserved for the band icon, active CTAs, and streaks.
 
-## Sprint status
-
-- ✅ **Sprint 0** — scaffold + design tokens + mock client/coach dashboards. **Sign-off required before Sprint 1.**
-- ⏭ **Sprint 1** — Postgres schema, auth, real data
-- ⏭ **Sprint 2** — coach → client messaging, program assignment
-- ⏭ **Sprint 3** — PDF export with @react-pdf/renderer
-- ⏭ **Sprint 4** — Railway deploy + custom domain
-
 ## Deploy
 
-See [`DEPLOY.md`](./DEPLOY.md) for step-by-step Railway + Postgres setup.
-
-## Program reference
-
-The full 90-day program specification lives outside this repo at `/home/markusbot/no-excuses-ninety/PROGRAM_REVISED.md`. v1.1 includes physician clearance, hydration target, deload weeks, band calibration, mood/energy logging, and the Day 90 exit interview.
+See [`DEPLOY.md`](./DEPLOY.md) for Railway + Postgres setup.
 
 ## License
 
-Private — Loadline Fitness internal.
+Private — LoadLine Fitness internal.

@@ -22,11 +22,11 @@ export interface SessionData {
   };
 }
 
-/** Where a signed-in user lives. Client never sees Staff. Coach lands on /coach. */
+/** Where a signed-in user lives. One house per role. Client never sees Staff. */
 export function housePath(role: SessionData["role"]): string {
   if (role === "staff") return "/staff";
   if (role === "coach") return "/coach";
-  return "/app/dashboard";
+  return "/client";
 }
 
 const sessionPassword =
