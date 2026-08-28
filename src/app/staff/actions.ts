@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { db, schema } from "@/db/client";
+import { db, schema, first } from "@/db/client";
 import { getSession } from "@/lib/auth";
 import { housePath } from "@/lib/session-config";
 import type { IronSession } from "iron-session";
@@ -23,7 +23,7 @@ async function requireStaffOrigin(): Promise<IronSession<SessionData>> {
 export async function openAsClientAction(formData: FormData) {
   const clientId = String(formData.get("clientId") ?? "");
   const session = await requireStaffOrigin();
-  const client = db.select().from(schema.clients).where(eq(schema.clients.id, clientId)).get();
+  const client = first(await db.select().from(schema.clients).where(eq(schema.clients.id, clientId)).limit(1));
   if (!client) redirect("/staff");
   session.userId = client.id;
   session.role = "client";
@@ -36,7 +36,7 @@ export async function openAsClientAction(formData: FormData) {
 export async function openAsCoachAction(formData: FormData) {
   const coachId = String(formData.get("coachId") ?? "");
   const session = await requireStaffOrigin();
-  const coach = db.select().from(schema.coaches).where(eq(schema.coaches.id, coachId)).get();
+  const coach = first(await db.select().from(schema.coaches).where(eq(schema.coaches.id, coachId)).limit(1));
   if (!coach) redirect("/staff");
   session.userId = coach.id;
   session.role = "coach";

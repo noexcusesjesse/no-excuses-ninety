@@ -1,8 +1,6 @@
 [phases.setup]
-# Node 22 — better-sqlite3@13.x ships prebuilds for all 22.x patches.
-# python3 — fallback so node-gyp can compile from source if a prebuild
-# is missing for a future patch version Nixpacks happens to install.
-nixPkgs = ["nodejs_22", "python3"]
+# Node 22 — no native compile step (Postgres client is pure JS).
+nixPkgs = ["nodejs_22"]
 
 [phases.install]
 cmds = ["npm ci --no-audit --no-fund"]

@@ -1,25 +1,45 @@
-# No Excuses Ninety — Deployment Guide
+# No Excuses Reset — Deployment Guide
+
+Production is **Postgres on Railway**. SQLite, `DATABASE_PATH`, and Railway volumes are gone. Local and Railway both use `DATABASE_URL`.
 
 ## Prerequisites
 
-- A Railway account (railway.app)
-- This repo pushed to GitHub
-- Node.js 20+ and npm for local testing
+- A Railway account with the **existing Postgres** database already created
+- This repo on GitHub
+- Node.js 22+ and npm for local testing
+
+## Environment variables
+
+| Variable | Required | Notes |
+|---|---|---|
+| `DATABASE_URL` | Yes | Postgres connection string. Railway sets this when you connect Postgres to the app service. |
+| `SESSION_SECRET` | Yes | iron-session cookie secret. **32+ characters.** Generate with `openssl rand -base64 32`. |
+
+Do not commit `.env` or production secrets.
+
+---
 
 ## Local Development
 
 ```bash
-# 1. Install dependencies
+# 1. Install dependencies (Node 22)
 npm install
 
 # 2. Copy the env template
 cp .env.example .env
-# Edit .env — set SESSION_SECRET to a secure 32+ character string
+# Set DATABASE_URL to your local Postgres
+# Set SESSION_SECRET to a 32+ character string
 
-# 3. Run database migration + seed
-npm run db:reset
+# 3. Create a local database (example)
+# createdb noexcuses
+# or: docker run --name noexcuses-pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=noexcuses -p 5432:5432 -d postgres:16
 
-# 4. Start dev server
+# 4. Migrate + seed
+npm run db:migrate
+npm run db:seed
+# Wipe and reseed: npm run db:reset   (drops the public schema in DATABASE_URL)
+
+# 5. Start
 npm run dev
 # Open http://localhost:3000
 ```
@@ -28,6 +48,7 @@ npm run dev
 
 | Role | Email | Password |
 |---|---|---|
+| Staff | `staff@loadlinefitness.com` | `staff-demo` |
 | Coach | `coach@loadlinefitness.com` | `loadline-demo` |
 | Client | `marcus@example.com` | `client-demo` |
 | Client | `diane@example.com` | `client-demo` |
@@ -40,139 +61,105 @@ Only Marcus (`marcus@example.com`) is physician-cleared for extended fasts.
 
 ---
 
-## Deploy to Railway
+## Deploy to Railway (Jesse)
 
-### Step 1: Push to GitHub
+You already have Postgres. Do **not** add a volume. Do **not** set `DATABASE_PATH`.
 
-```bash
-git init
-git add .
-git commit -m "Initial commit"
-git remote add origin https://github.com/<your-org>/no-excuses-ninety.git
-git push -u origin main
-```
+### 1. Push to GitHub
 
-### Step 2: Create Railway Project
+Deploy from this GitHub repo (new project → Deploy from GitHub, or connect the existing Railway service to this repo).
 
-1. Go to [Railway](https://railway.app) → **New Project** → **Deploy from GitHub repo**
-2. Select your repo
-3. Railway detects the Node.js app automatically (`package.json` has a `start` script)
+### 2. Connect the existing Railway Postgres
 
-### Step 3: Add a Persistent Volume
+1. Open the app service in Railway
+2. **Variables** → connect / reference the existing Postgres plugin
+3. Confirm `DATABASE_URL` is present (Railway injects it from the plugin)
+4. Add `SESSION_SECRET` — 32+ characters: `openssl rand -base64 32`
 
-SQLite stores data in a file. Railway's filesystem is wiped on every redeploy, so **you must add a volume** to keep data:
+Use the **internal** `DATABASE_URL` from the linked Postgres (not a public proxy URL) when the app and database are in the same Railway project.
 
-1. In Railway dashboard → your service → **Settings** → **Volumes**
-2. Add a volume mounted at `/data`
-3. This ensures `app.db` survives redeploys
+### 3. Deploy
 
-### Step 4: Set Environment Variables
+Nixpacks (`nixpacks.toml`) pins **Node 22** and:
 
-In Railway dashboard → your service → **Variables**, add:
+1. `npm ci`
+2. `npm run build` (Next.js production build)
+3. `npm run db:migrate` (creates staffs, messages, clients, coaches, program_days, check-ins, etc.)
+4. Start: `npm start`
+5. Health check: `GET /api/health` (200 only if Postgres answers)
 
-| Variable | Value | Required |
-|---|---|---|
-| `DATABASE_PATH` | `/data/app.db` | Yes — points to the persistent volume |
-| `SESSION_SECRET` | A secure 32+ character string | Yes — generates with `openssl rand -base64 32` |
+No `python3` / `node-gyp` / `better-sqlite3` compile.
 
-**Generate a session secret:**
-```bash
-openssl rand -base64 32
-```
+### 4. Seed once (first deploy only)
 
-### Step 5: Deploy
-
-1. Railway will build automatically using Nixpacks (`nixpacks.toml`)
-2. The build runs `npm run build` (Next.js production build)
-3. The build also runs `npm run db:migrate` (creates/migrates the DB schema)
-4. The start command is `npm start` (Next.js production server)
-5. The health check hits `/api/health` (returns 200 if app + DB are running)
-
-### Step 6: Seed the Database (first deploy only)
-
-After the first successful deploy, run the seed script:
+After the first successful deploy:
 
 ```bash
-# Install Railway CLI if needed
 npm install -g @railway/cli
-
-# Link to your project
 railway link
-
-# Run the seed
 railway run npm run db:seed
 ```
 
 This creates:
-- 1 coach account (`coach@loadlinefitness.com` / `loadline-demo`)
-- 6 demo client accounts (`/client-demo`)
-- 90-day program template (90 program_days rows)
-- ~206 daily check-ins + ~32 weight entries
 
-### Step 7: Verify
+- Staff: `staff@loadlinefitness.com` / `staff-demo`
+- Coach: `coach@loadlinefitness.com` / `loadline-demo`
+- 6 demo clients (`client-demo`), including Marcus
+- 90-day program template
+- Sample check-ins, weights, one LoadLine broadcast, Marcus 1:1 thread
 
-1. Visit your Railway URL (e.g., `https://your-app.up.railway.app`)
-2. You should see the LoadLine Fitness marketing landing page
-3. Click "Start Your Journey" → login page
-4. Login with coach credentials → see the roster
-5. Login with client credentials → see the 5-tab dashboard
-6. Check `/api/health` — should return `{"ok": true, "db": "connected", ...}`
+Seed is idempotent: running it again will not duplicate the coach/clients. Do **not** run `npm run db:reset` on production — that drops the public schema.
+
+### 5. Verify
+
+1. Open the Railway URL
+2. Login: staff / coach / Marcus (`client-demo`)
+3. Client never sees Staff. Broadcasts show as **LoadLine**. Fasting gates and the 15-month position helper are unchanged.
+4. `GET /api/health` → `{"ok": true, "db": "connected", ...}`
 
 ---
 
 ## Custom Domain
 
-1. In Railway dashboard → your service → **Settings** → **Networking**
-2. Add a custom domain (e.g., `app.loadlinefitness.com`)
-3. Add a CNAME record in your DNS pointing to the Railway URL
-4. Railway handles SSL automatically
+1. Railway dashboard → service → **Settings** → **Networking**
+2. Add a custom domain
+3. CNAME in DNS to the Railway URL
+4. Railway handles SSL
 
 ---
 
 ## Production Security Checklist
 
-- [ ] `SESSION_SECRET` is set to a secure 32+ character string (NOT the default)
-- [ ] `DATABASE_PATH` points to `/data/app.db` (persistent volume)
-- [ ] Volume is mounted at `/data` in Railway
-- [ ] `NODE_ENV` is set to `production` (Railway sets this automatically)
-- [ ] HTTPS is enforced (Railway does this automatically)
-- [ ] Default passwords (`client-demo`, `loadline-demo`) are changed after first login
-- [ ] `SESSION_SECRET` is not committed to the repo
-- [ ] `.env` is in `.gitignore` (verify)
-- [ ] Health check endpoint (`/api/health`) responds with 200
-- [ ] Rate limiting: consider adding `@upstash/ratelimit` for the login endpoint
-- [ ] CSP headers: consider adding `next-secure-headers` or manual CSP middleware
+- [ ] `SESSION_SECRET` is a secure 32+ character string (not the local default)
+- [ ] `DATABASE_URL` points at the linked Railway Postgres (internal)
+- [ ] No SQLite volume, no `DATABASE_PATH`
+- [ ] `NODE_ENV` is `production` (Railway sets this)
+- [ ] HTTPS is on (Railway)
+- [ ] Demo passwords changed after first login if this is a real roster
+- [ ] `.env` is not in git
+- [ ] `/api/health` returns 200
+- [ ] Rate limiting: consider `@upstash/ratelimit` on login
+- [ ] CSP: consider `next-secure-headers` or middleware CSP
 
 ---
 
 ## Troubleshooting
 
-### Build fails with `better-sqlite3` error
+### Build fails on migrate
 
-The `nixpacks.toml` includes `python3` so `node-gyp` can compile `better-sqlite3` from source if prebuilds aren't available. If this still fails:
-
-1. Check the Node.js version — the nixpacks config pins Node 22
-2. Make sure `python3` is in `nixPkgs` (it is in the current config)
-3. Try rebuilding in Railway (Settings → Rebuild)
-
-### Database is empty after redeploy
-
-You need a persistent volume. Without it, Railway wipes the filesystem on every redeploy:
-
-1. Railway dashboard → Settings → Volumes
-2. Add a volume at `/data`
-3. Set `DATABASE_PATH=/data/app.db`
+1. Confirm Postgres is linked and `DATABASE_URL` is set on the **app** service (available at build time)
+2. Confirm you are not still setting `DATABASE_PATH`
+3. Rebuild after linking Postgres
 
 ### Login doesn't work after deploy
 
-1. Make sure you ran `npm run db:seed` (via Railway CLI) after the first deploy
-2. Check that `DATABASE_PATH` points to the volume path
-3. Verify the health check: `curl https://your-app.up.railway.app/api/health`
+1. Run `railway run npm run db:seed` once
+2. `curl https://your-app.up.railway.app/api/health` — must show `"db": "connected"`
+3. Confirm `SESSION_SECRET` is 32+ characters and has not rotated (rotation logs everyone out)
 
 ### Session expires immediately
 
-1. Check that `SESSION_SECRET` is set and is 32+ characters
-2. If the secret changes, all existing sessions are invalidated (by design)
+`SESSION_SECRET` missing, too short, or changed. Set a stable 32+ character value.
 
 ---
 
@@ -184,23 +171,23 @@ Client (browser)
 Next.js 14 (App Router)
   ├── Middleware (iron-session cookie check)
   ├── Server Components (async DB queries via Drizzle)
-  ├── API Routes (/api/health, /api/coach, /api/fasting/*, /api/coach/*)
-  └── SQLite (better-sqlite3)
+  ├── API Routes (/api/health, /api/fasting/*, /api/coach/*, /api/messages/*)
+  └── Postgres (postgres.js + Drizzle)
         ↓
-  /data/app.db (Railway persistent volume)
+  DATABASE_URL (Railway Postgres plugin)
 ```
 
 | Layer | Technology |
 |---|---|
 | Framework | Next.js 14.2 (App Router) |
-| Database | SQLite (better-sqlite3) |
+| Database | Postgres via `DATABASE_URL` (postgres.js) |
 | ORM | Drizzle ORM 0.45 |
 | Auth | iron-session 8 (encrypted cookies) |
 | Password hashing | bcryptjs |
 | Styling | Tailwind CSS 3.4 |
 | Icons | lucide-react |
-| Deployment | Railway (Nixpacks) |
-| Health check | GET /api/health |
+| Deployment | Railway (Nixpacks, Node 22) |
+| Health check | GET /api/health (verifies Postgres) |
 
 ---
 

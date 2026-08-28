@@ -1,5 +1,5 @@
 /**
- * No Excuses Reset Program — DB schema (Drizzle + SQLite)
+ * No Excuses Reset Program — DB schema (Drizzle + Postgres)
  *
  * Tables:
  *   coaches       — accounts that own client rosters
@@ -21,31 +21,38 @@
  *   - clients.anchorDay / treDays / resetVariant — per-client fasting settings
  *   - daily_checkins.fastType / fastStartMs / fastEndMs / fastDurationMs — fasting log
  */
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
-import { sql } from "drizzle-orm";
+import {
+  pgTable,
+  text,
+  integer,
+  real,
+  boolean,
+  timestamp,
+  bigint,
+} from "drizzle-orm/pg-core";
 
-export const coaches = sqliteTable("coaches", {
+export const coaches = pgTable("coaches", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 /** Program ops. Same shape as coaches. Staff is not a third daily-log role. */
-export const staffs = sqliteTable("staffs", {
+export const staffs = pgTable("staffs", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
-export const clients = sqliteTable("clients", {
+export const clients = pgTable("clients", {
   id: text("id").primaryKey(),
   coachId: text("coach_id")
     .notNull()
@@ -62,7 +69,7 @@ export const clients = sqliteTable("clients", {
   /** Date of birth ISO. Used for age + physician clearance reminders. */
   dateOfBirth: text("date_of_birth"),
   /** Physician cleared for extended fasts (24h+). Gates 24h/36h fast options. */
-  physicianClearedExtendedFasts: integer("physician_cleared_extended", { mode: "boolean" })
+  physicianClearedExtendedFasts: boolean("physician_cleared_extended")
     .notNull()
     .default(false),
   /** Fasting anchor day (0=Sun...6=Sat). Default 1 (Monday). */
@@ -71,9 +78,9 @@ export const clients = sqliteTable("clients", {
   treDays: text("tre_days").notNull().default("[3,5]"),
   /** Reset day variant: "standard_24hr" or "extended_36hr". Month-gated (24h from month 7, 36h from month 8). */
   resetVariant: text("reset_variant").notNull().default("standard_24hr"),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 /**
@@ -83,7 +90,7 @@ export const clients = sqliteTable("clients", {
  * Days 1-30 = Foundation, 31-60 = Build, 61-90 = Identity.
  * Deload weeks at 4, 8, 12.
  */
-export const programDays = sqliteTable("program_days", {
+export const programDays = pgTable("program_days", {
   /** Day number, 1-90. */
   dayNumber: integer("day_number").primaryKey(),
   /** "A", "B", or "REST". */
@@ -92,24 +99,24 @@ export const programDays = sqliteTable("program_days", {
   phase: text("phase").notNull(),
   /** Week number 1-13. */
   weekNumber: integer("week_number").notNull(),
-  /** 1 if this is a deload week (lightest bands, 1 round). */
-  isDeload: integer("is_deload", { mode: "boolean" }).notNull().default(false),
+  /** true if this is a deload week (lightest bands, 1 round). */
+  isDeload: boolean("is_deload").notNull().default(false),
   /** Day of week label for this day number (Mon, Tue, ...). */
   dayLabel: text("day_label").notNull(),
-  /** 1 if Saturday fasted 60-min walk, else regular walk minutes. */
-  isFastedWalk: integer("is_fasted_walk", { mode: "boolean" }).notNull().default(false),
+  /** true if Saturday fasted 60-min walk, else regular walk minutes. */
+  isFastedWalk: boolean("is_fasted_walk").notNull().default(false),
   walkMinutes: integer("walk_minutes").notNull().default(30),
 });
 
-export const dailyCheckins = sqliteTable("daily_checkins", {
+export const dailyCheckins = pgTable("daily_checkins", {
   id: text("id").primaryKey(),
   clientId: text("client_id")
     .notNull()
     .references(() => clients.id, { onDelete: "cascade" }),
   /** ISO date "YYYY-MM-DD". Unique per client — one check-in per day. */
   date: text("date").notNull(),
-  /** 1 if completed, 0 if skipped. NULL if not yet logged. */
-  workoutDone: integer("workout_done", { mode: "boolean" }),
+  /** true if completed, false if skipped. NULL if not yet logged. */
+  workoutDone: boolean("workout_done"),
   /** Walk completed minutes. NULL if not yet logged. */
   walkMinutes: integer("walk_minutes"),
   /** Steps logged (manual entry for Sprint 1). */
@@ -132,22 +139,22 @@ export const dailyCheckins = sqliteTable("daily_checkins", {
   // Fasting log fields (Phase 2)
   /** Fast type for this day: "overnight_12_14" | "tre_16_8" | "reset_24hr" | "pre_14_10" | "pre_12_12" */
   fastType: text("fast_type"),
-  /** Fast start time (epoch ms). */
-  fastStartMs: integer("fast_start_ms"),
+  /** Fast start time (epoch ms). bigint — ms exceeds Postgres integer. */
+  fastStartMs: bigint("fast_start_ms", { mode: "number" }),
   /** Fast end time (epoch ms). */
-  fastEndMs: integer("fast_end_ms"),
+  fastEndMs: bigint("fast_end_ms", { mode: "number" }),
   /** Fast duration in ms. */
-  fastDurationMs: integer("fast_duration_ms"),
+  fastDurationMs: bigint("fast_duration_ms", { mode: "number" }),
 
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
-export const weights = sqliteTable("weights", {
+export const weights = pgTable("weights", {
   id: text("id").primaryKey(),
   clientId: text("client_id")
     .notNull()
@@ -157,12 +164,12 @@ export const weights = sqliteTable("weights", {
   weightLb: real("weight_lb").notNull(),
   /** Waist measurement in inches, optional. */
   waistIn: real("waist_in"),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
-export const auditLog = sqliteTable("audit_log", {
+export const auditLog = pgTable("audit_log", {
   id: text("id").primaryKey(),
   /** Coach who took the action. */
   coachId: text("coach_id")
@@ -176,16 +183,16 @@ export const auditLog = sqliteTable("audit_log", {
   action: text("action").notNull(),
   /** Free-form details (JSON or plain text). */
   details: text("details"),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 /**
  * Assigned-coach 1:1 only. senderRole is "coach" | "client" — never staff.
  * A coach may only write if clients.coach_id matches.
  */
-export const threadMessages = sqliteTable("thread_messages", {
+export const threadMessages = pgTable("thread_messages", {
   id: text("id").primaryKey(),
   coachId: text("coach_id")
     .notNull()
@@ -195,13 +202,13 @@ export const threadMessages = sqliteTable("thread_messages", {
     .references(() => clients.id, { onDelete: "cascade" }),
   senderRole: text("sender_role").notNull(),
   body: text("body").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 /** Staff program blast. Recipients see "LoadLine", not Staff. */
-export const broadcasts = sqliteTable("broadcasts", {
+export const broadcasts = pgTable("broadcasts", {
   id: text("id").primaryKey(),
   staffId: text("staff_id")
     .notNull()
@@ -209,9 +216,9 @@ export const broadcasts = sqliteTable("broadcasts", {
   /** "all" | "clients" | "coaches" */
   audience: text("audience").notNull(),
   body: text("body").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 export type Coach = typeof coaches.$inferSelect;

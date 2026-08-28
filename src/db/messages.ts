@@ -4,7 +4,7 @@
  *   2. Staff broadcasts, shown to recipients as LoadLine (program)
  */
 import "server-only";
-import { db, schema } from "./client";
+import { db, schema, first } from "./client";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { randomUUID } from "node:crypto";
@@ -58,23 +58,22 @@ export async function getAssignedThread(clientId: string): Promise<AssignedThrea
   const session = await getSession();
   if (!session.userId) return null;
 
-  const client = db.select().from(schema.clients).where(eq(schema.clients.id, clientId)).get();
+  const client = first(await db.select().from(schema.clients).where(eq(schema.clients.id, clientId)).limit(1));
   if (!client) return null;
 
   if (session.role === "client" && session.userId !== clientId) return null;
   if (session.role === "coach" && session.userId !== client.coachId) return null;
   if (session.role === "staff") return null;
 
-  const coach = db.select().from(schema.coaches).where(eq(schema.coaches.id, client.coachId)).get();
+  const coach = first(await db.select().from(schema.coaches).where(eq(schema.coaches.id, client.coachId)).limit(1));
   if (!coach) return null;
 
-  const rows = db.select().from(schema.threadMessages)
+  const rows = await db.select().from(schema.threadMessages)
     .where(and(
       eq(schema.threadMessages.coachId, client.coachId),
       eq(schema.threadMessages.clientId, clientId),
     ))
-    .orderBy(schema.threadMessages.createdAt)
-    .all();
+    .orderBy(schema.threadMessages.createdAt);
 
   const canSend =
     !previewing(session) &&
@@ -124,7 +123,7 @@ export async function sendThreadMessage(
   const targetClientId = session.role === "client" ? session.userId : clientId;
   if (!targetClientId) return { ok: false, error: "Missing clientId", status: 400 };
 
-  const client = db.select().from(schema.clients).where(eq(schema.clients.id, targetClientId)).get();
+  const client = first(await db.select().from(schema.clients).where(eq(schema.clients.id, targetClientId)).limit(1));
   if (!client) return { ok: false, error: "Client not found", status: 404 };
 
   if (session.role === "coach" && client.coachId !== session.userId) {
@@ -133,15 +132,15 @@ export async function sendThreadMessage(
 
   const senderRole: ThreadSender = session.role;
   const id = randomUUID();
-  db.insert(schema.threadMessages).values({
+  await db.insert(schema.threadMessages).values({
     id,
     coachId: client.coachId,
     clientId: client.id,
     senderRole,
     body: text,
-  }).run();
+  });
 
-  const row = db.select().from(schema.threadMessages).where(eq(schema.threadMessages.id, id)).get();
+  const row = first(await db.select().from(schema.threadMessages).where(eq(schema.threadMessages.id, id)).limit(1));
   return {
     ok: true,
     message: {
@@ -161,11 +160,10 @@ export async function getProgramNotices(): Promise<ProgramNotice[]> {
   const session = await getSession();
   if (!session.userId || (session.role !== "client" && session.role !== "coach")) return [];
   const allowed = audiencesFor(session.role);
-  const rows = db.select().from(schema.broadcasts)
+  const rows = await db.select().from(schema.broadcasts)
     .where(inArray(schema.broadcasts.audience, allowed))
     .orderBy(desc(schema.broadcasts.createdAt))
-    .limit(50)
-    .all();
+    .limit(50);
   return rows.map((r) => ({
     id: r.id,
     from: LOADLINE_FROM,
@@ -178,10 +176,9 @@ export async function getProgramNotices(): Promise<ProgramNotice[]> {
 export async function getStaffBroadcasts(): Promise<ProgramNotice[]> {
   const session = await getSession();
   if (!session.userId || session.role !== "staff") return [];
-  const rows = db.select().from(schema.broadcasts)
+  const rows = await db.select().from(schema.broadcasts)
     .orderBy(desc(schema.broadcasts.createdAt))
-    .limit(50)
-    .all();
+    .limit(50);
   return rows.map((r) => ({
     id: r.id,
     from: LOADLINE_FROM,
@@ -207,13 +204,13 @@ export async function sendBroadcast(
   if (text.length > MAX_MESSAGE_CHARS) return { ok: false, error: "Message too long", status: 400 };
 
   const id = randomUUID();
-  db.insert(schema.broadcasts).values({
+  await db.insert(schema.broadcasts).values({
     id,
     staffId: session.userId,
     audience,
     body: text,
-  }).run();
-  const row = db.select().from(schema.broadcasts).where(eq(schema.broadcasts.id, id)).get();
+  });
+  const row = first(await db.select().from(schema.broadcasts).where(eq(schema.broadcasts.id, id)).limit(1));
   return {
     ok: true,
     notice: {

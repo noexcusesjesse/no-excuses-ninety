@@ -8,7 +8,7 @@
  * via getSession() + requireClient()/requireCoach() from @/lib/auth.
  */
 import "server-only";
-import { db, schema } from "./client";
+import { db, schema, first } from "./client";
 import { and, eq, desc, gte } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import {
@@ -71,24 +71,26 @@ export async function getClientToday(): Promise<ClientToday | null> {
   const clientId = session.userId;
 
   const today = todayISODate();
-  const client = db.select().from(schema.clients)
-    .where(eq(schema.clients.id, clientId)).get();
+  const client = first(
+    await db.select().from(schema.clients).where(eq(schema.clients.id, clientId)).limit(1),
+  );
   if (!client) return null;
 
   const position = getProgramPosition(client.startDate, today);
   const plan = getDayPlan(position);
 
   // Today's check-in (may be null if not yet logged)
-  const todayCheckin = db.select().from(schema.dailyCheckins)
-    .where(and(eq(schema.dailyCheckins.clientId, client.id), eq(schema.dailyCheckins.date, today)))
-    .get();
+  const todayCheckin = first(
+    await db.select().from(schema.dailyCheckins)
+      .where(and(eq(schema.dailyCheckins.clientId, client.id), eq(schema.dailyCheckins.date, today)))
+      .limit(1),
+  );
 
   // Walk streak: count consecutive days back from today with walkMinutes > 0
-  const recentCheckins = db.select().from(schema.dailyCheckins)
+  const recentCheckins = await db.select().from(schema.dailyCheckins)
     .where(eq(schema.dailyCheckins.clientId, client.id))
     .orderBy(desc(schema.dailyCheckins.date))
-    .limit(90)
-    .all();
+    .limit(90);
 
   let walkStreak = 0;
   for (const ci of recentCheckins) {
@@ -168,21 +170,21 @@ function daysAgoLabel(iso: string | null): string {
   return `${Math.floor(days / 7)}w ago`;
 }
 
-function lastCheckinDate(clientId: string): string | null {
-  const row = db.select({ date: schema.dailyCheckins.date })
-    .from(schema.dailyCheckins)
-    .where(eq(schema.dailyCheckins.clientId, clientId))
-    .orderBy(desc(schema.dailyCheckins.date))
-    .limit(1)
-    .get();
+async function lastCheckinDate(clientId: string): Promise<string | null> {
+  const row = first(
+    await db.select({ date: schema.dailyCheckins.date })
+      .from(schema.dailyCheckins)
+      .where(eq(schema.dailyCheckins.clientId, clientId))
+      .orderBy(desc(schema.dailyCheckins.date))
+      .limit(1),
+  );
   return row?.date ?? null;
 }
 
-function rolling7DayStats(clientId: string, asOf: string) {
+async function rolling7DayStats(clientId: string, asOf: string) {
   const sevenDaysAgo = addDays(asOf, -6);
-  const recent = db.select().from(schema.dailyCheckins)
-    .where(and(eq(schema.dailyCheckins.clientId, clientId), gte(schema.dailyCheckins.date, sevenDaysAgo)))
-    .all();
+  const recent = await db.select().from(schema.dailyCheckins)
+    .where(and(eq(schema.dailyCheckins.clientId, clientId), gte(schema.dailyCheckins.date, sevenDaysAgo)));
 
   const aBDaysInWindow = recent.filter((ci) => {
     const d = new Date(ci.date + "T00:00:00Z");
@@ -216,18 +218,19 @@ export async function getCoachClients(): Promise<CoachClientRow[]> {
   if (!session.userId || session.role !== "coach") return [];
   const coachId = session.userId;
 
-  const coach = db.select().from(schema.coaches)
-    .where(eq(schema.coaches.id, coachId)).get();
+  const coach = first(
+    await db.select().from(schema.coaches).where(eq(schema.coaches.id, coachId)).limit(1),
+  );
   if (!coach) return [];
 
-  const clients = db.select().from(schema.clients)
-    .where(eq(schema.clients.coachId, coach.id)).all();
+  const clients = await db.select().from(schema.clients)
+    .where(eq(schema.clients.coachId, coach.id));
 
   const asOf = todayISODate();
   const sevenDaysAgo = addDays(asOf, -6);
 
-  return clients.map((c) => {
-    const lastCheckIn = lastCheckinDate(c.id);
+  const rows = await Promise.all(clients.map(async (c) => {
+    const lastCheckIn = await lastCheckinDate(c.id);
     const snapshot = coachProgramSnapshot(
       c.startDate,
       asOf,
@@ -235,14 +238,18 @@ export async function getCoachClients(): Promise<CoachClientRow[]> {
       c.physicianClearedExtendedFasts ?? false,
     );
     const { workoutCompletion, walkCompletion, proteinHitRate, moodAvg } =
-      rolling7DayStats(c.id, asOf);
+      await rolling7DayStats(c.id, asOf);
 
-    const w7dAgo = db.select().from(schema.weights)
-      .where(and(eq(schema.weights.clientId, c.id), eq(schema.weights.date, sevenDaysAgo)))
-      .get();
-    const wNow = db.select().from(schema.weights)
-      .where(eq(schema.weights.clientId, c.id))
-      .orderBy(desc(schema.weights.date)).limit(1).get();
+    const w7dAgo = first(
+      await db.select().from(schema.weights)
+        .where(and(eq(schema.weights.clientId, c.id), eq(schema.weights.date, sevenDaysAgo)))
+        .limit(1),
+    );
+    const wNow = first(
+      await db.select().from(schema.weights)
+        .where(eq(schema.weights.clientId, c.id))
+        .orderBy(desc(schema.weights.date)).limit(1),
+    );
     const weightTrend7d = w7dAgo && wNow ? Math.round((wNow.weightLb - w7dAgo.weightLb) * 10) / 10 : 0;
 
     const daysSince = snapshot.daysSinceCheckIn ?? 999;
@@ -263,7 +270,8 @@ export async function getCoachClients(): Promise<CoachClientRow[]> {
       currentWeight: wNow?.weightLb ?? null,
       moodAvg,
     };
-  }).sort((a, b) => {
+  }));
+  return rows.sort((a, b) => {
     const order = { "off": 0, "slipping": 1, "on-track": 2 } as const;
     const byStatus = order[a.status] - order[b.status];
     if (byStatus !== 0) return byStatus;
@@ -338,8 +346,9 @@ export async function getClientDetail(
   const session = await getSession();
   if (!session.userId || session.role !== "coach") return null;
 
-  const client = db.select().from(schema.clients)
-    .where(eq(schema.clients.id, clientId)).get();
+  const client = first(
+    await db.select().from(schema.clients).where(eq(schema.clients.id, clientId)).limit(1),
+  );
   if (!client) return null;
 
   // Verify this client belongs to the coach
@@ -347,7 +356,7 @@ export async function getClientDetail(
 
   const asOf = todayISODate();
   const sevenDaysAgo = addDays(asOf, -6);
-  const lastCheckIn = lastCheckinDate(clientId);
+  const lastCheckIn = await lastCheckinDate(clientId);
   const snapshot = coachProgramSnapshot(
     client.startDate,
     asOf,
@@ -355,32 +364,37 @@ export async function getClientDetail(
     client.physicianClearedExtendedFasts ?? false,
   );
   const { workoutCompletion, walkCompletion, proteinHitRate, moodAvg } =
-    rolling7DayStats(clientId, asOf);
+    await rolling7DayStats(clientId, asOf);
 
-  const w7dAgo = db.select().from(schema.weights)
-    .where(and(eq(schema.weights.clientId, clientId), eq(schema.weights.date, sevenDaysAgo))).get();
-  const wNow = db.select().from(schema.weights)
-    .where(eq(schema.weights.clientId, clientId)).orderBy(desc(schema.weights.date)).limit(1).get();
+  const w7dAgo = first(
+    await db.select().from(schema.weights)
+      .where(and(eq(schema.weights.clientId, clientId), eq(schema.weights.date, sevenDaysAgo)))
+      .limit(1),
+  );
+  const wNow = first(
+    await db.select().from(schema.weights)
+      .where(eq(schema.weights.clientId, clientId)).orderBy(desc(schema.weights.date)).limit(1),
+  );
   const weightTrend7d = w7dAgo && wNow ? Math.round((wNow.weightLb - w7dAgo.weightLb) * 10) / 10 : 0;
 
   const daysSince = snapshot.daysSinceCheckIn ?? 999;
   const status = complianceStatus(daysSince, workoutCompletion, proteinHitRate);
 
-  const allCheckins = db.select().from(schema.dailyCheckins)
+  const allCheckins = await db.select().from(schema.dailyCheckins)
     .where(eq(schema.dailyCheckins.clientId, clientId))
-    .orderBy(desc(schema.dailyCheckins.date)).limit(90).all();
+    .orderBy(desc(schema.dailyCheckins.date)).limit(90);
 
-  const allWeights = db.select().from(schema.weights)
+  const allWeights = await db.select().from(schema.weights)
     .where(eq(schema.weights.clientId, clientId))
-    .orderBy(schema.weights.date).all();
+    .orderBy(schema.weights.date);
 
-  const notes = db.select().from(schema.auditLog)
+  const notes = await db.select().from(schema.auditLog)
     .where(and(eq(schema.auditLog.clientId, clientId), eq(schema.auditLog.action, "note_added")))
-    .orderBy(desc(schema.auditLog.createdAt)).all();
+    .orderBy(desc(schema.auditLog.createdAt));
 
-  const calibration = db.select().from(schema.auditLog)
+  const calibration = await db.select().from(schema.auditLog)
     .where(and(eq(schema.auditLog.clientId, clientId), eq(schema.auditLog.action, "band_calibration")))
-    .orderBy(desc(schema.auditLog.createdAt)).all();
+    .orderBy(desc(schema.auditLog.createdAt));
 
   let ageYears: number | null = null;
   if (client.dateOfBirth) {
@@ -468,7 +482,7 @@ export async function createClient(input: NewClientInput): Promise<string | null
   const clientId = randomUUID();
   const passwordHash = hashSync("client-demo", 10); // default password
 
-  db.insert(schema.clients).values({
+  await db.insert(schema.clients).values({
     id: clientId,
     coachId,
     email: input.email.toLowerCase(),
@@ -484,16 +498,16 @@ export async function createClient(input: NewClientInput): Promise<string | null
     // standard_24hr never schedules 24h during Basic Training or The Ninety —
     // getDayType gates on block + month (Month 7+). Do not default to extended_36hr.
     resetVariant: "standard_24hr",
-  }).run();
+  });
 
   // Log in audit
-  db.insert(schema.auditLog).values({
+  await db.insert(schema.auditLog).values({
     id: randomUUID(),
     coachId,
     clientId,
     action: "client_created",
     details: JSON.stringify({ name: input.name, email: input.email }),
-  }).run();
+  });
 
   return clientId;
 }
@@ -507,13 +521,13 @@ export async function addCoachNote(clientId: string, note: string): Promise<bool
   if (!session.userId || session.role !== "coach") return false;
 
   const { randomUUID } = await import("node:crypto");
-  db.insert(schema.auditLog).values({
+  await db.insert(schema.auditLog).values({
     id: randomUUID(),
     coachId: session.userId,
     clientId,
     action: "note_added",
     details: note,
-  }).run();
+  });
 
   return true;
 }
@@ -539,13 +553,13 @@ export async function addBandCalibration(
 
   const { randomUUID } = await import("node:crypto");
   for (const entry of entries) {
-    db.insert(schema.auditLog).values({
+    await db.insert(schema.auditLog).values({
       id: randomUUID(),
       coachId: session.userId,
       clientId,
       action: "band_calibration",
       details: JSON.stringify(entry),
-    }).run();
+    });
   }
   return true;
 }
@@ -628,8 +642,9 @@ export async function getCycleData(): Promise<CycleData | null> {
   if (!session.userId || session.role !== "client") return null;
   const clientId = session.userId;
 
-  const client = db.select().from(schema.clients)
-    .where(eq(schema.clients.id, clientId)).get();
+  const client = first(
+    await db.select().from(schema.clients).where(eq(schema.clients.id, clientId)).limit(1),
+  );
   if (!client) return null;
 
   const today = todayISODate();
@@ -638,17 +653,17 @@ export async function getCycleData(): Promise<CycleData | null> {
 
   const startWeight = client.startWeightLb;
 
-  const weightRows = db.select().from(schema.weights)
+  const weightRows = await db.select().from(schema.weights)
     .where(eq(schema.weights.clientId, clientId))
-    .orderBy(desc(schema.weights.date)).all();
+    .orderBy(desc(schema.weights.date));
 
   const currentWeight = weightRows[0]?.weightLb ?? startWeight;
   const monthStartWeight = weightRows.find((w) => w.date <= window.start)?.weightLb ?? startWeight;
   const weightChange = currentWeight - monthStartWeight;
 
-  const checkins = db.select().from(schema.dailyCheckins)
+  const checkins = (await db.select().from(schema.dailyCheckins)
     .where(eq(schema.dailyCheckins.clientId, clientId))
-    .orderBy(desc(schema.dailyCheckins.date)).all()
+    .orderBy(desc(schema.dailyCheckins.date)))
     .filter((c) => c.date >= window.start && c.date <= window.end);
 
   const loggedDays = checkins.length;
@@ -698,9 +713,9 @@ export async function getWeightHistory(): Promise<WeightEntry[]> {
   if (!session.userId || session.role !== "client") return [];
   const clientId = session.userId;
 
-  const rows = db.select().from(schema.weights)
+  const rows = await db.select().from(schema.weights)
     .where(eq(schema.weights.clientId, clientId))
-    .orderBy(schema.weights.date).all();
+    .orderBy(schema.weights.date);
 
   return rows.map((r) => ({
     date: r.date,
@@ -731,13 +746,14 @@ export async function getClientProfile(): Promise<ClientProfile | null> {
   if (!session.userId || session.role !== "client") return null;
   const clientId = session.userId;
 
-  const client = db.select().from(schema.clients)
-    .where(eq(schema.clients.id, clientId)).get();
+  const client = first(
+    await db.select().from(schema.clients).where(eq(schema.clients.id, clientId)).limit(1),
+  );
   if (!client) return null;
 
-  const weightRows = db.select().from(schema.weights)
+  const weightRows = await db.select().from(schema.weights)
     .where(eq(schema.weights.clientId, clientId))
-    .orderBy(desc(schema.weights.date)).limit(1).all();
+    .orderBy(desc(schema.weights.date)).limit(1);
 
   let ageYears: number | null = null;
   if (client.dateOfBirth) {
@@ -810,17 +826,18 @@ export async function getStaffOps(): Promise<StaffOpsData | null> {
   const today = todayISODate();
   const yesterday = addDays(today, -1);
 
-  const coaches = db.select().from(schema.coaches).all();
-  const clients = db.select().from(schema.clients).all();
+  const coaches = await db.select().from(schema.coaches);
+  const clients = await db.select().from(schema.clients);
   const coachName = new Map(coaches.map((c) => [c.id, c.name]));
 
-  const rows: StaffClientRow[] = clients.map((c) => {
+  const rows: StaffClientRow[] = await Promise.all(clients.map(async (c) => {
     const position = getProgramPosition(c.startDate, today);
-    const lastCheckin = db.select().from(schema.dailyCheckins)
-      .where(eq(schema.dailyCheckins.clientId, c.id))
-      .orderBy(desc(schema.dailyCheckins.date))
-      .limit(1)
-      .get();
+    const lastCheckin = first(
+      await db.select().from(schema.dailyCheckins)
+        .where(eq(schema.dailyCheckins.clientId, c.id))
+        .orderBy(desc(schema.dailyCheckins.date))
+        .limit(1),
+    );
 
     const started = position.block !== "before";
     const lastDate = lastCheckin?.date ?? null;
@@ -843,7 +860,7 @@ export async function getStaffOps(): Promise<StaffOpsData | null> {
       day90Interview: day90InterviewStatus(position),
       extendedFast24hEligibleByMonth: position.extendedFast24hEligibleByMonth,
     };
-  });
+  }));
 
   rows.sort((a, b) => {
     const rank = (r: StaffClientRow) => {

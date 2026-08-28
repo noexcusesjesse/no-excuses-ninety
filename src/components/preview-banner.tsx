@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/auth";
 import { exitPreviewAction } from "@/app/staff/actions";
-import { db, schema } from "@/db/client";
+import { db, schema, first } from "@/db/client";
 import { eq } from "drizzle-orm";
 
 /**
@@ -14,9 +14,9 @@ export async function PreviewBanner() {
 
   let name = session.email;
   if (session.role === "client") {
-    name = db.select().from(schema.clients).where(eq(schema.clients.id, session.userId)).get()?.name ?? name;
+    name = first(await db.select().from(schema.clients).where(eq(schema.clients.id, session.userId)).limit(1))?.name ?? name;
   } else if (session.role === "coach") {
-    name = db.select().from(schema.coaches).where(eq(schema.coaches.id, session.userId)).get()?.name ?? name;
+    name = first(await db.select().from(schema.coaches).where(eq(schema.coaches.id, session.userId)).limit(1))?.name ?? name;
   }
 
   const roleLabel = session.role === "coach" ? "coach" : "client";
