@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function ClientHouseLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session.userId) redirect("/login");
   if (session.role !== "client") redirect(housePath(session.role));

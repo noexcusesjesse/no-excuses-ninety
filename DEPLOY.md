@@ -113,9 +113,10 @@ Seed is idempotent: running it again will not duplicate the coach/clients. Do **
 ### 5. Verify
 
 1. Open the Railway URL
-2. Login: staff / coach / Marcus (`client-demo`)
+2. Login: staff → `/staff`, coach → `/coach`, Marcus (`client-demo`) → `/client`
 3. Client never sees Staff. Broadcasts show as **LoadLine**. Fasting gates and the 15-month position helper are unchanged.
-4. `GET /api/health` → `{"ok": true, "db": "connected", ...}`
+4. Visiting `/staff` as a client must not show ops. Visiting `/client` as coach/staff must bounce to their house.
+5. `GET /api/health` → `{"ok": true, "db": "connected", ...}`
 
 ---
 
