@@ -1,7 +1,6 @@
 /**
- * Mock data for Sprint 0. All of this will be replaced by SQLite-backed
- * queries in Sprint 1. Kept here so we can iterate on the visual direction
- * without a database in the loop.
+ * Mock data for Sprint 0. Historical fixtures for visual iteration.
+ * Live dashboards read Postgres via src/db/queries.ts.
  *
  * Program structure derived from /home/markusbot/no-excuses-ninety/PROGRAM_REVISED.md
  */

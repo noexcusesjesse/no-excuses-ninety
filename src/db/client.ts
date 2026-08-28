@@ -1,18 +1,33 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import "dotenv/config";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
-import { existsSync, mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
 
-const DATABASE_PATH = process.env.DATABASE_PATH || resolve(process.cwd(), "data", "app.db");
+function requireDatabaseUrl(): string {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "DATABASE_URL is required. Set it to a Postgres connection string (local or Railway).",
+    );
+  }
+  return url;
+}
 
-const parentDir = dirname(DATABASE_PATH);
-if (!existsSync(parentDir)) mkdirSync(parentDir, { recursive: true });
+const globalForPg = globalThis as unknown as {
+  postgresSql: ReturnType<typeof postgres> | undefined;
+};
 
-const sqlite = new Database(DATABASE_PATH);
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
+/** Shared postgres.js pool. Cached in dev so Next.js HMR does not leak connections. */
+export const sql =
+  globalForPg.postgresSql ?? postgres(requireDatabaseUrl(), { max: 10 });
 
-export const db = drizzle(sqlite, { schema });
+if (process.env.NODE_ENV !== "production") {
+  globalForPg.postgresSql = sql;
+}
+
+export const db = drizzle(sql, { schema });
 export { schema };
-export const rawDb = sqlite;
+
+export function first<T>(rows: T[]): T | undefined {
+  return rows[0];
+}

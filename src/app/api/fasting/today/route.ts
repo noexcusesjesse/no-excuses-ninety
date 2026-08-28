@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { db, schema } from "@/db/client";
+import { db, schema, first } from "@/db/client";
 import { and, eq } from "drizzle-orm";
 import {
   getDayType,
@@ -25,8 +25,9 @@ export async function GET() {
   }
   const clientId = session.userId;
 
-  const client = db.select().from(schema.clients)
-    .where(eq(schema.clients.id, clientId)).get();
+  const client = first(
+    await db.select().from(schema.clients).where(eq(schema.clients.id, clientId)).limit(1),
+  );
   if (!client) {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
@@ -44,12 +45,14 @@ export async function GET() {
   const { type, label, color } = getDayTypeLabel(today, settings, null, position);
 
   // Check for active fast today
-  const activeFast = db.select().from(schema.dailyCheckins)
-    .where(and(
-      eq(schema.dailyCheckins.clientId, clientId),
-      eq(schema.dailyCheckins.date, todayISO),
-    ))
-    .get();
+  const activeFast = first(
+    await db.select().from(schema.dailyCheckins)
+      .where(and(
+        eq(schema.dailyCheckins.clientId, clientId),
+        eq(schema.dailyCheckins.date, todayISO),
+      ))
+      .limit(1),
+  );
 
   const isActive = activeFast?.fastStartMs && !activeFast?.fastEndMs;
 
@@ -85,15 +88,18 @@ export async function POST(req: NextRequest) {
   const todayISO = todayISODate();
 
   // Find or create today's check-in
-  const checkin = db.select().from(schema.dailyCheckins)
-    .where(and(
-      eq(schema.dailyCheckins.clientId, clientId),
-      eq(schema.dailyCheckins.date, todayISO),
-    ))
-    .get();
+  const checkin = first(
+    await db.select().from(schema.dailyCheckins)
+      .where(and(
+        eq(schema.dailyCheckins.clientId, clientId),
+        eq(schema.dailyCheckins.date, todayISO),
+      ))
+      .limit(1),
+  );
 
-  const client = db.select().from(schema.clients)
-    .where(eq(schema.clients.id, clientId)).get();
+  const client = first(
+    await db.select().from(schema.clients).where(eq(schema.clients.id, clientId)).limit(1),
+  );
   if (!client) {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
@@ -114,7 +120,7 @@ export async function POST(req: NextRequest) {
     const nowDate = new Date(nowMs);
     if (checkin) {
       // Update existing check-in
-      db.update(schema.dailyCheckins)
+      await db.update(schema.dailyCheckins)
         .set({
           fastType,
           fastStartMs: nowMs,
@@ -122,11 +128,10 @@ export async function POST(req: NextRequest) {
           fastDurationMs: null,
           updatedAt: nowDate,
         })
-        .where(eq(schema.dailyCheckins.id, checkin.id))
-        .run();
+        .where(eq(schema.dailyCheckins.id, checkin.id));
     } else {
       // Create new check-in with fast started
-      db.insert(schema.dailyCheckins).values({
+      await db.insert(schema.dailyCheckins).values({
         id: crypto.randomUUID(),
         clientId,
         date: todayISO,
@@ -136,7 +141,7 @@ export async function POST(req: NextRequest) {
         fastDurationMs: null,
         createdAt: nowDate,
         updatedAt: nowDate,
-      }).run();
+      });
     }
     return NextResponse.json({ ok: true, action: "start", startMs: nowMs });
   }
@@ -148,14 +153,13 @@ export async function POST(req: NextRequest) {
     const nowMs = Date.now();
     const nowDate = new Date(nowMs);
     const duration = nowMs - checkin.fastStartMs;
-    db.update(schema.dailyCheckins)
+    await db.update(schema.dailyCheckins)
       .set({
         fastEndMs: nowMs,
         fastDurationMs: duration,
         updatedAt: nowDate,
       })
-      .where(eq(schema.dailyCheckins.id, checkin.id))
-      .run();
+      .where(eq(schema.dailyCheckins.id, checkin.id));
     return NextResponse.json({ ok: true, action: "end", endMs: nowMs, durationMs: duration });
   }
 

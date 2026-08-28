@@ -1,16 +1,17 @@
 /**
- * Seed the DB with: 1 coach, 6 clients, The Ninety 1–90 template,
- * and daily check-ins per client.
+ * Seed the DB with: 1 staff (Jesse, ops), 1 coach, 6 clients, The Ninety 1–90
+ * template, and daily check-ins per client.
  *
  * First-cohort default: Marcus startDate = 2026-09-01 (Day 1 of The Ninety).
  * Basic Training is Aug 18–31. He is physician-cleared; 24h/36h still must not
  * appear until Month 7 / Month 8.
  *
  * Run: npm run db:seed (after npm run db:migrate)
- * Idempotent: existing coach with seed email skips seed.
+ * Idempotent: staff is seeded independently; existing coach email skips clients.
  */
-import { db, schema } from "./client";
-import { sql } from "drizzle-orm";
+import "dotenv/config";
+import { db, schema, first, sql as pg } from "./client";
+import { eq } from "drizzle-orm";
 import { hashSync } from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import {
@@ -24,6 +25,8 @@ import {
 
 const COACH_EMAIL = "coach@loadlinefitness.com";
 const COACH_PASSWORD = "loadline-demo";
+const STAFF_EMAIL = "staff@loadlinefitness.com";
+const STAFF_PASSWORD = "staff-demo";
 
 const CLIENT_SEED: Array<{
   email: string;
@@ -54,11 +57,76 @@ function isoDaysAgo(days: number): string {
 }
 function weekOf(day: number): number { return Math.ceil(day / 7); }
 
+async function seedMessagingIfNeeded(): Promise<void> {
+  const staff = first(await db.select().from(schema.staffs).where(eq(schema.staffs.email, STAFF_EMAIL)).limit(1));
+  const coach = first(await db.select().from(schema.coaches).where(eq(schema.coaches.email, COACH_EMAIL)).limit(1));
+  const marcus = first(await db.select().from(schema.clients).where(eq(schema.clients.email, "marcus@example.com")).limit(1));
+
+  const existingBlast = first(await db.select().from(schema.broadcasts).limit(1));
+  if (staff && !existingBlast) {
+    await db.insert(schema.broadcasts).values({
+      id: randomUUID(),
+      staffId: staff.id,
+      audience: "all",
+      body: "Welcome to the No Excuses Reset Program. Program updates from LoadLine show up here. Your 1:1 with your assigned coach is a separate thread — Staff is not in it.",
+    });
+    console.log("  + Program broadcast (all users)");
+  }
+
+  if (coach && marcus) {
+    const existingThread = first(
+      await db.select().from(schema.threadMessages)
+        .where(eq(schema.threadMessages.clientId, marcus.id)).limit(1),
+    );
+    if (!existingThread) {
+      await db.insert(schema.threadMessages).values([
+        {
+          id: randomUUID(),
+          coachId: coach.id,
+          clientId: marcus.id,
+          senderRole: "coach",
+          body: "Welcome, Marcus. This thread is just you and me — not an AI. Log your days and message me here if you get stuck.",
+        },
+        {
+          id: randomUUID(),
+          coachId: coach.id,
+          clientId: marcus.id,
+          senderRole: "client",
+          body: "Got it. See you on Day 1.",
+        },
+      ]);
+      console.log("  + 1:1 thread for Marcus Johnson");
+    }
+  }
+}
+
+async function seedStaffIfNeeded(): Promise<void> {
+  const existingStaff = first(await db.select().from(schema.staffs).where(eq(schema.staffs.email, STAFF_EMAIL)).limit(1));
+  if (existingStaff) {
+    console.log(`Staff ${STAFF_EMAIL} already exists.`);
+    return;
+  }
+  const staffId = randomUUID();
+  await db.insert(schema.staffs).values({
+    id: staffId,
+    email: STAFF_EMAIL,
+    passwordHash: hashSync(STAFF_PASSWORD, 10),
+    name: "Jesse Collins",
+  });
+  console.log(`  + Staff: ${STAFF_EMAIL} / ${STAFF_PASSWORD}`);
+}
+
 export async function seedDatabase(): Promise<void> {
-  const existing = db.select().from(schema.coaches).where(sql`email = ${COACH_EMAIL}`).get();
+  console.log("Seeding staff (program ops)...");
+  await seedStaffIfNeeded();
+
+  const existing = first(await db.select().from(schema.coaches).where(eq(schema.coaches.email, COACH_EMAIL)).limit(1));
   if (existing) {
-    console.log(`Coach ${COACH_EMAIL} already exists. Skipping seed.`);
+    console.log(`Coach ${COACH_EMAIL} already exists. Skipping coach/client seed.`);
     console.log(`(run 'npm run db:reset' to wipe + reseed)`);
+    await seedMessagingIfNeeded();
+    console.log(`Staff login: ${STAFF_EMAIL} / ${STAFF_PASSWORD}`);
+    await pg.end({ timeout: 5 });
     return;
   }
 
@@ -78,14 +146,14 @@ export async function seedDatabase(): Promise<void> {
     const walkMinutes = dayOfWeek === "Sat" ? 60 : dayOfWeek === "Sun" ? 25 : 30;
     programRows.push({ dayNumber: day, workout, phase, weekNumber: week, isDeload, dayLabel: dayOfWeek, isFastedWalk, walkMinutes });
   }
-  db.insert(schema.programDays).values(programRows).run();
+  await db.insert(schema.programDays).values(programRows);
   console.log(`  + ${programRows.length} program days`);
 
   console.log("Seeding coach...");
   const coachId = randomUUID();
-  db.insert(schema.coaches).values({
+  await db.insert(schema.coaches).values({
     id: coachId, email: COACH_EMAIL, passwordHash: hashSync(COACH_PASSWORD, 10), name: "Jesse Collins",
-  }).run();
+  });
   console.log(`  + Coach: ${COACH_EMAIL} / ${COACH_PASSWORD}`);
 
   console.log("Seeding clients + check-ins...");
@@ -95,12 +163,12 @@ export async function seedDatabase(): Promise<void> {
   for (const c of CLIENT_SEED) {
     const clientId = randomUUID();
     const startDate = c.startDate ?? isoDaysAgo(c.startDaysAgo ?? 1);
-    db.insert(schema.clients).values({
+    await db.insert(schema.clients).values({
       id: clientId, coachId, email: c.email, passwordHash: hashSync(CLIENT_PW, 10),
       name: c.name, startDate, startWeightLb: c.startWeight, heightIn: 72, dateOfBirth: "1975-01-15",
       physicianClearedExtendedFasts: c.email === "marcus@example.com", // demo: only Marcus is cleared
       anchorDay: 1, treDays: "[3,5]", resetVariant: "standard_24hr",
-    }).run();
+    });
 
     const posToday = getProgramPosition(startDate, today);
     const historyStart = posToday.basicTrainingStartDate;
@@ -125,7 +193,7 @@ export async function seedDatabase(): Promise<void> {
           notes: rand() < 0.05 ? "Felt a bit tired after squats" : null,
         });
       }
-      if (checkinRows.length) db.insert(schema.dailyCheckins).values(checkinRows).run();
+      if (checkinRows.length) await db.insert(schema.dailyCheckins).values(checkinRows);
     }
 
     const weightRows = [];
@@ -150,12 +218,22 @@ export async function seedDatabase(): Promise<void> {
         waistIn: 51,
       });
     }
-    if (weightRows.length) db.insert(schema.weights).values(weightRows).run();
+    if (weightRows.length) await db.insert(schema.weights).values(weightRows);
     console.log(`  + ${c.name}: start ${startDate}, ${checkinRows.length} check-ins, ${weightRows.length} weights`);
   }
+
+  await seedMessagingIfNeeded();
+
   console.log("\nSeed complete.");
-  console.log(`Coach login: ${COACH_EMAIL} / ${COACH_PASSWORD}`);
+  console.log(`Staff login:  ${STAFF_EMAIL} / ${STAFF_PASSWORD}`);
+  console.log(`Coach login:  ${COACH_EMAIL} / ${COACH_PASSWORD}`);
   console.log(`Client logins: CLIENT_SEED emails / password "client-demo"`);
+  await pg.end({ timeout: 5 });
 }
 
-seedDatabase().catch((e) => { console.error(e); process.exit(1); });
+const invokedDirectly =
+  process.argv[1]?.includes("seed.ts") || process.argv[1]?.endsWith("seed");
+
+if (invokedDirectly) {
+  seedDatabase().catch((e) => { console.error(e); process.exit(1); });
+}

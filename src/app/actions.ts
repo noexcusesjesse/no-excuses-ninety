@@ -15,6 +15,7 @@ export async function loginAction(formData: FormData) {
   session.userId = result.userId;
   session.role = result.role;
   session.email = result.email;
+  delete session.staffReturn;
   await session.save();
   redirect(housePath(result.role));
 }

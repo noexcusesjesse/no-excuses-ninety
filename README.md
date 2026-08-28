@@ -10,19 +10,22 @@ Built for the Loadline Fitness client program: tirzepatide-aware, resistance-ban
 - **shadcn-style** primitives (hand-rolled; no shadcn CLI install)
 - **Inter** + **JetBrains Mono** via `next/font/google`
 - **Lucide React** icons (pinned to 0.460+)
-- **SQLite + Railway Volume** (Sprint 1)
+- **Postgres** via `DATABASE_URL` (Drizzle + postgres.js). Railway uses the existing Postgres plugin — no SQLite volume.
 - **@react-pdf/renderer** for client PDF export (Sprint 1)
 
 ## Local development
 
 ```bash
 npm install
+cp .env.example .env   # set DATABASE_URL + SESSION_SECRET (32+ chars)
+npm run db:migrate
+npm run db:seed
 npm run dev          # http://localhost:3000
 npm run build        # production build
 npm run start        # serve production build
 ```
 
-Requires **Node 22** (better-sqlite3 prebuild coverage).
+Requires **Node 22**.
 
 ## Project structure
 
@@ -49,14 +52,14 @@ All colors live in `globals.css` as HSL CSS variables and are mapped to Tailwind
 ## Sprint status
 
 - ✅ **Sprint 0** — scaffold + design tokens + mock client/coach dashboards. **Sign-off required before Sprint 1.**
-- ⏭ **Sprint 1** — SQLite schema, auth, real data
+- ⏭ **Sprint 1** — Postgres schema, auth, real data
 - ⏭ **Sprint 2** — coach → client messaging, program assignment
 - ⏭ **Sprint 3** — PDF export with @react-pdf/renderer
 - ⏭ **Sprint 4** — Railway deploy + custom domain
 
 ## Deploy
 
-See [`DEPLOY_RAILWAY.md`](./DEPLOY_RAILWAY.md) for step-by-step Railway setup.
+See [`DEPLOY.md`](./DEPLOY.md) for step-by-step Railway + Postgres setup.
 
 ## Program reference
 
