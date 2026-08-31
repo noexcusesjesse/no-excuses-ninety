@@ -67,7 +67,7 @@ export function Logo({ size = "md", showTagline = true, className, ...props }: L
       height={h}
       className={cn("shrink-0", className)}
       role="img"
-      aria-label="No Excuses Ninety — 90-Day Reset Protocol"
+      aria-label="LoadLine 30"
       {...props}
     >
       <defs>

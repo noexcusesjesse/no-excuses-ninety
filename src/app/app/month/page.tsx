@@ -30,7 +30,7 @@ export default async function MonthPage() {
     bad: "border-destructive/30 bg-destructive/10 text-destructive",
   };
 
-  const isRunway = today.position.block === "basicTraining" || today.position.block === "before";
+  const isRunway = today.position.block === "bootCamp" || today.position.block === "before";
   const progressOf = cycle.monthOf;
   const secondary = formatPositionSecondary(today.position);
 
@@ -46,7 +46,7 @@ export default async function MonthPage() {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>{isRunway ? "14-Day Runway" : "30-Day Month"}</CardTitle>
+          <CardTitle>{isRunway ? "Boot Camp analog" : cycle.blockLabel}</CardTitle>
           <CardDescription>
             {cycle.blockLabel}
             {" · "}

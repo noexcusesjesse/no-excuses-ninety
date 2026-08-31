@@ -1,9 +1,14 @@
 /**
  * Program position + fasting gate checks. Run: npx tsx src/lib/program-position.test.ts
+ *
+ * Live clock is LoadLine phase DATE WINDOWS. No Ninety / 15-month Reset.
+ * No 365-row day-by-day protocol in these assertions.
  */
 import assert from "node:assert/strict";
 import {
   FIRST_COHORT_DAY_ONE,
+  LOADLINE_FORMULA,
+  blockLabel,
   coachProgramSnapshot,
   day90InterviewStatus,
   extendedFastProtocol,
@@ -55,185 +60,221 @@ function hoursOn(iso: string, settings: FastingSettings) {
   return getTargetHours(type, settings, position);
 }
 
-// --- First-cohort calendar ---
+function assertNotNinetyCopy(value: string) {
+  assert.ok(!/the ninety/i.test(value), `must not say The Ninety: ${value}`);
+  assert.ok(!/basic training/i.test(value), `must not say Basic Training: ${value}`);
+  assert.ok(!/base camp/i.test(value), `must not say Base Camp: ${value}`);
+  assert.ok(!/no excuses nomad/i.test(value), `must not say No Excuses Nomad: ${value}`);
+  assert.ok(!/of 15/.test(value), `must not use 15-month clock: ${value}`);
+}
+
+// --- Boot Camp analog (Aug 18–31 2026) ---
 const aug27 = getProgramPosition(START, "2026-08-27");
-assert.equal(aug27.block, "basicTraining");
+assert.equal(aug27.block, "bootCamp");
 assert.equal(aug27.dayInBlock, 10);
 assert.equal(aug27.daysInBlock, 14);
 assert.equal(aug27.programMonth, null);
 assert.equal(aug27.ninetyPhase, null);
 assert.equal(aug27.basicTrainingStartDate, "2026-08-18");
+assert.equal(aug27.bootCampStartDate, "2026-08-18");
 assert.equal(aug27.startDate, "2026-09-01");
 assert.equal(isOvernightOnlyBlock(aug27.block), true);
-assert.equal(formatPositionKicker(aug27, "Thu"), "Thu · Basic Training · Runway day 10 of 14");
-assert.equal(formatPositionSecondary(aug27), "The Ninety starts Sep 1, 2026");
+assert.equal(formatPositionKicker(aug27, "Thu"), "Thu · Boot Camp · Day 10 of 14");
+assert.equal(formatPositionSecondary(aug27), "LoadLine 30 starts Sep 1, 2026");
 assert.ok(!formatPositionKicker(aug27, "Thu").includes("of 90"));
+assertNotNinetyCopy(formatPositionKicker(aug27, "Thu"));
+assertNotNinetyCopy(formatPositionSecondary(aug27) ?? "");
 
 const aug18 = getProgramPosition(START, "2026-08-18");
-assert.equal(aug18.block, "basicTraining");
+assert.equal(aug18.block, "bootCamp");
 assert.equal(aug18.dayInBlock, 1);
 
 const aug31 = getProgramPosition(START, "2026-08-31");
-assert.equal(aug31.block, "basicTraining");
+assert.equal(aug31.block, "bootCamp");
 assert.equal(aug31.dayInBlock, 14);
+assert.notEqual(blockLabel(aug31.block), "The Ninety");
+assert.equal(formatPositionKicker(aug31, "Mon"), "Mon · Boot Camp · Day 14 of 14");
+assert.equal(formatPositionSecondary(aug31), "LoadLine 30 starts Sep 1, 2026");
+assert.ok(!/ninety/i.test(formatPositionKicker(aug31, "Mon")));
+assert.ok(!/basic training/i.test(formatPositionKicker(aug31, "Mon")));
 
+// --- LoadLine 30 Day 1 (Tue Sep 1 2026) ---
 const sep1 = getProgramPosition(START, "2026-09-01");
-assert.equal(sep1.block, "ninety");
-assert.equal(sep1.programMonth, 1);
+assert.equal(sep1.block, "loadLine30");
 assert.equal(sep1.programDay, 1);
 assert.equal(sep1.dayInBlock, 1);
-assert.equal(sep1.ninetyPhase, "Foundation");
+assert.equal(sep1.daysInBlock, 30);
+assert.equal(sep1.programMonth, null);
+assert.equal(sep1.ninetyPhase, null);
 assert.equal(sep1.isDeload, false);
-assert.equal(formatPositionKicker(sep1, "Tue"), "Tue · The Ninety · Month 1 Foundation");
-assert.equal(formatPositionSecondary(sep1), "Day 1 of 90");
+assert.equal(formatPositionKicker(sep1, "Tue"), "Tue · LoadLine 30 · Day 1 of 30");
+assert.equal(formatPositionSecondary(sep1), "Day 1 of 30");
+assertNotNinetyCopy(formatPositionKicker(sep1, "Tue"));
+assert.ok(!formatPositionKicker(sep1, "Tue").includes("Reset"));
 
-const day90 = getProgramPosition(START, "2026-11-29");
-assert.equal(day90.block, "ninety");
-assert.equal(day90.programDay, 90);
-assert.equal(day90.programMonth, 3);
-assert.equal(day90.ninetyPhase, "Identity");
-assert.equal(day90.ninetyEndDate, "2026-11-29");
+const day1Plan = getDayPlan(sep1);
+assert.equal(day1Plan.dayLabel, "Tue");
+assert.equal(day1Plan.environment, "foundation");
+assert.equal(day1Plan.workout, "REST");
+assert.equal(day1Plan.isDay1Calibration, true);
+assert.equal(day1Plan.isDeload, false);
+assert.equal(day1Plan.isFastedWalk, false);
+assert.match(day1Plan.extra, /Band calibration/i);
+assert.match(day1Plan.extra, /Foundation/i);
+assert.ok(!/hero Strength/i.test(day1Plan.extra) || /Not a hero Strength/.test(day1Plan.extra));
 
-const day91 = getProgramPosition(START, "2026-11-30");
-assert.equal(day91.block, "build");
-assert.equal(day91.programDay, 91);
-assert.equal(day91.programMonth, 4);
-assert.equal(day91.ninetyPhase, null);
-assert.equal(formatPositionKicker(day91, "Mon"), "Mon · The Build · Month 4 of 15");
-assert.ok(!formatPositionKicker(day91, "Mon").includes("Identity"));
+const sep30 = getProgramPosition(START, "2026-09-30");
+assert.equal(sep30.block, "loadLine30");
+assert.equal(sep30.programDay, 30);
+assert.equal(sep30.dayInBlock, 30);
+assert.equal(formatPositionKicker(sep30, "Wed"), "Wed · LoadLine 30 · Day 30 of 30");
 
-assert.equal(programEndDate(START), "2027-11-30");
-const lastDay = getProgramPosition(START, "2027-11-30");
-assert.equal(lastDay.block, "mastery");
-assert.equal(lastDay.programMonth, 15);
+// --- LoadLine 60 starts Oct 1 — not Ninety month 2 ---
+const oct1 = getProgramPosition(START, "2026-10-01");
+assert.equal(oct1.block, "loadLine60");
+assert.equal(oct1.programDay, 31);
+assert.equal(oct1.programMonth, null);
+assert.equal(formatPositionKicker(oct1, "Thu"), "Thu · LoadLine 60");
+assert.ok(!/ninety/i.test(formatPositionKicker(oct1, "Thu")));
+assert.ok(!/month 2/i.test(formatPositionKicker(oct1, "Thu")));
+assert.equal(formatPositionSecondary(oct1), "Oct 1, 2026 – Oct 30, 2026");
 
-const after = getProgramPosition(START, "2027-12-01");
-assert.equal(after.block, "complete");
+const oct30 = getProgramPosition(START, "2026-10-30");
+assert.equal(oct30.block, "loadLine60");
+assert.equal(oct30.programDay, 60);
 
-const month7start = getProgramPosition(START, "2027-02-28");
-assert.equal(month7start.programMonth, 7);
-assert.equal(month7start.block, "build");
-assert.equal(month7start.extendedFast24hEligibleByMonth, true);
-assert.equal(month7start.extendedFast36hEligibleByMonth, false);
+// --- Later phase labels only (date windows, not 365-row copy) ---
+const oct31 = getProgramPosition(START, "2026-10-31");
+assert.equal(oct31.block, "loadLine90");
+assert.equal(oct31.programDay, 61);
+assert.equal(formatPositionKicker(oct31, "Sat"), "Sat · LoadLine 90");
+assert.ok(!/the ninety/i.test(formatPositionKicker(oct31, "Sat")));
 
-const month6end = getProgramPosition(START, "2027-02-27");
-assert.equal(month6end.programMonth, 6);
-assert.equal(month6end.extendedFast24hEligibleByMonth, false);
+const nov29 = getProgramPosition(START, "2026-11-29");
+assert.equal(nov29.block, "loadLine90");
+assert.equal(nov29.programDay, 90);
 
-const month8start = getProgramPosition(START, "2027-03-30");
-assert.equal(month8start.programMonth, 8);
-assert.equal(month8start.extendedFast24hEligibleByMonth, true);
-assert.equal(month8start.extendedFast36hEligibleByMonth, true);
+const nov30 = getProgramPosition(START, "2026-11-30");
+assert.equal(nov30.block, "loadLine180");
+assert.equal(nov30.programDay, 91);
+assert.equal(formatPositionKicker(nov30, "Mon"), "Mon · LoadLine 180");
 
-// Deloads weeks 4, 8, 12 of The Ninety
-assert.equal(getProgramPosition(START, "2026-09-22").isDeload, true); // day 22, week 4
-assert.equal(getProgramPosition(START, "2026-09-21").isDeload, false); // day 21, week 3
+const feb27 = getProgramPosition(START, "2027-02-27");
+assert.equal(feb27.block, "loadLine180");
+assert.equal(feb27.programDay, 180);
 
-// Saturday fasted walk is calendar Saturday
+const feb28 = getProgramPosition(START, "2027-02-28");
+assert.equal(feb28.block, "loadLine365");
+assert.equal(feb28.programDay, 181);
+assert.equal(formatPositionKicker(feb28, "Sun"), "Sun · LoadLine 365");
+assert.ok(!/^NOMAD$/i.test(formatPositionKicker(feb28, "Sun")));
+assert.ok(!formatPositionKicker(feb28, "Sun").includes("NOMAD"));
+
+const aug31_27 = getProgramPosition(START, "2027-08-31");
+assert.equal(aug31_27.block, "loadLine365");
+assert.equal(aug31_27.programDay, 365);
+assert.ok(!formatPositionKicker(aug31_27, "Tue").includes("NOMAD"));
+
+assert.equal(programEndDate(START), "2027-08-31");
+
+const nomadDay = getProgramPosition(START, "2027-09-01");
+assert.equal(nomadDay.block, "nomad");
+assert.equal(nomadDay.programDay, 366);
+assert.equal(formatPositionKicker(nomadDay, "Wed"), "Wed · NOMAD");
+assert.ok(!/no excuses nomad/i.test(formatPositionKicker(nomadDay, "Wed")));
+
+// No Ninety deloads
+assert.equal(getProgramPosition(START, "2026-09-22").isDeload, false);
+assert.equal(getProgramPosition(START, "2026-09-21").isDeload, false);
+
 const sat = getDayPlan(getProgramPosition(START, "2026-08-29"));
 assert.equal(sat.dayLabel, "Sat");
-assert.equal(sat.isFastedWalk, true);
+assert.equal(sat.isFastedWalk, false);
 assert.equal(sat.walkMinutes, 60);
+assert.equal(sat.environment, "condition");
 
-// --- Fasting gates ---
-// Monday during Basic Training (Aug 24 2026), cleared → overnight, not 24h
-assert.equal(typeOn("2026-08-24", CLEARED_24), "overnight_12_14");
-assert.equal(typeOn("2026-08-24", CLEARED_36), "overnight_12_14");
+const mon = getDayPlan(getProgramPosition(START, "2026-09-07"));
+assert.equal(mon.environment, "strength");
+assert.equal(mon.walkMinutes, 30);
+assert.equal(mon.stretchMinutes, 10);
 
-// Thursday Aug 27 — overnight
-assert.equal(typeOn("2026-08-27", CLEARED_24), "overnight_12_14");
+assert.equal(LOADLINE_FORMULA, "TRAIN → MOVE → RECOVER → TRACK → REPEAT");
 
-// Day 1 of The Ninety (Tue) — overnight, no 24h/36h
-assert.equal(typeOn("2026-09-01", CLEARED_24), "overnight_12_14");
-assert.equal(typeOn("2026-09-01", CLEARED_36), "overnight_12_14");
+// --- Fasting gates: 14:10 meal window, never 24h/36h ---
+assert.equal(typeOn("2026-08-24", CLEARED_24), "pre_14_10");
+assert.equal(typeOn("2026-08-24", CLEARED_36), "pre_14_10");
+assert.equal(typeOn("2026-08-27", CLEARED_24), "pre_14_10");
+assert.equal(typeOn("2026-09-01", CLEARED_24), "pre_14_10");
+assert.equal(typeOn("2026-09-01", CLEARED_36), "pre_14_10");
+assert.equal(typeOn("2026-09-07", CLEARED_36), "pre_14_10");
+assert.equal(hoursOn("2026-09-07", CLEARED_36), 14);
+assert.equal(typeOn("2026-09-02", CLEARED_24), "pre_14_10");
+assert.equal(typeOn("2026-10-01", CLEARED_24), "pre_14_10");
+assert.equal(typeOn("2026-12-07", CLEARED_24), "pre_14_10");
+assert.equal(typeOn("2027-03-01", CLEARED_24), "pre_14_10");
+assert.equal(hoursOn("2027-03-01", CLEARED_24), 14);
+assert.equal(typeOn("2027-03-01", CLEARED_36), "pre_14_10");
+assert.equal(typeOn("2027-03-01", NOT_CLEARED), "pre_14_10");
+assert.equal(typeOn("2027-04-05", CLEARED_36), "pre_14_10");
+assert.equal(hoursOn("2027-04-05", CLEARED_36), 14);
 
-// Monday in The Ninety (Sep 7), cleared + 36h variant → still overnight
-assert.equal(typeOn("2026-09-07", CLEARED_36), "overnight_12_14");
-assert.equal(hoursOn("2026-09-07", CLEARED_36), 13);
-
-// TRE days during The Ninety (Wed Sep 2) → overnight, not 16:8
-assert.equal(typeOn("2026-09-02", CLEARED_24), "overnight_12_14");
-
-// Monday in Month 4 (Dec 7 2026) — Build, month < 7 → TRE, not 24h
-assert.equal(getProgramPosition(START, "2026-12-07").programMonth, 4);
-assert.equal(typeOn("2026-12-07", CLEARED_24), "tre_16_8");
-assert.equal(typeOn("2026-12-07", CLEARED_36), "tre_16_8");
-
-// TRE allowed in The Build
-assert.equal(typeOn("2026-12-09", CLEARED_24), "tre_16_8"); // Wed
-
-// Monday Month 7 (Mar 1 2027) cleared → 24h, even with 36h variant
-assert.equal(getProgramPosition(START, "2027-03-01").programMonth, 7);
-assert.equal(typeOn("2027-03-01", CLEARED_24), "reset_24hr");
-assert.equal(hoursOn("2027-03-01", CLEARED_24), 24);
-assert.equal(typeOn("2027-03-01", CLEARED_36), "reset_24hr");
-assert.equal(hoursOn("2027-03-01", CLEARED_36), 24);
-assert.equal(typeOn("2027-03-01", NOT_CLEARED), "tre_16_8");
-
-// Monday Month 8 (Apr 5 2027) cleared + 36h variant → 36h
-assert.equal(getProgramPosition(START, "2027-04-05").programMonth, 8);
-assert.equal(typeOn("2027-04-05", CLEARED_36), "reset_24hr");
-assert.equal(hoursOn("2027-04-05", CLEARED_36), 36);
-assert.equal(hoursOn("2027-04-05", CLEARED_24), 24);
-
-// --- Coach house (15-month identity, no Day N of 90 clamp) ---
+// --- Coach house labels ---
 assert.equal(monthLabel(aug27), "Pre-Day 1");
-assert.equal(formatCoachWhere(aug27), "Basic Training · Pre-Day 1 · Day 10 of 14");
+assert.equal(formatCoachWhere(aug27), "Boot Camp · Pre-Day 1 · Day 10 of 14");
 assert.ok(!formatCoachWhere(aug27).includes("of 90"));
 assert.equal(extendedFastProtocol(aug27).overnightOnly, true);
 assert.equal(extendedFastProtocol(aug27).inProtocol24h, false);
 assert.equal(extendedFastProtocol(aug27).inProtocol36h, false);
 assert.match(extendedFastProtocol(aug27).label, /not in protocol/i);
-assert.match(extendedFastProtocol(aug27).label, /Basic Training/);
+assert.match(extendedFastProtocol(aug27).label, /Boot Camp/);
+assert.ok(!/Basic Training/.test(extendedFastProtocol(aug27).label));
 
 const coachAug27 = coachProgramSnapshot(START, "2026-08-27", "2026-08-26", true);
-assert.equal(coachAug27.blockLabel, "Basic Training");
+assert.equal(coachAug27.blockLabel, "Boot Camp");
 assert.equal(coachAug27.monthLabel, "Pre-Day 1");
-assert.equal(coachAug27.whereLine, "Basic Training · Pre-Day 1 · Day 10 of 14");
+assert.equal(coachAug27.whereLine, "Boot Camp · Pre-Day 1 · Day 10 of 14");
 assert.equal(coachAug27.missingLog, false);
 assert.equal(coachAug27.physicianClearedExtendedFasts, true);
 assert.equal(coachAug27.extendedFast24hInProtocol, false);
 assert.equal(coachAug27.overnightOnly, true);
 
-assert.equal(monthLabel(sep1), "Month 1");
-assert.equal(formatCoachWhere(sep1), "The Ninety · Month 1 Foundation · Day 1 of 90");
+assert.equal(monthLabel(sep1), "LoadLine 30");
+assert.equal(formatCoachWhere(sep1), "LoadLine 30 · Day 1 of 30");
 assert.equal(extendedFastProtocol(sep1).overnightOnly, true);
 assert.equal(extendedFastProtocol(sep1).inProtocol24h, false);
-assert.match(extendedFastProtocol(sep1).label, /The Ninety/);
+assert.match(extendedFastProtocol(sep1).label, /LoadLine 30/);
+assert.ok(!/The Ninety/.test(extendedFastProtocol(sep1).label));
 
 const coachSep1 = coachProgramSnapshot(START, "2026-09-01", "2026-08-31", true);
-assert.equal(coachSep1.blockLabel, "The Ninety");
-assert.equal(coachSep1.monthLabel, "Month 1");
+assert.equal(coachSep1.blockLabel, "LoadLine 30");
+assert.equal(coachSep1.monthLabel, "LoadLine 30");
 assert.equal(coachSep1.position.programDay, 1);
 assert.equal(coachSep1.extendedFast24hInProtocol, false);
 
+const coachOct1 = coachProgramSnapshot(START, "2026-10-01", "2026-09-30", true);
+assert.equal(coachOct1.blockLabel, "LoadLine 60");
+assert.ok(!coachOct1.whereLine.includes("The Ninety"));
+assert.ok(!coachOct1.whereLine.includes("Month 2"));
+
 const coachDay90 = coachProgramSnapshot(START, "2026-11-29", "2026-11-29", true);
-assert.equal(coachDay90.blockLabel, "The Ninety");
-assert.equal(coachDay90.position.ninetyPhase, "Identity");
+assert.equal(coachDay90.blockLabel, "LoadLine 90");
+assert.equal(coachDay90.position.ninetyPhase, null);
 
 const coachDay91 = coachProgramSnapshot(START, "2026-11-30", "2026-11-29", true);
-assert.equal(coachDay91.blockLabel, "The Build");
-assert.equal(coachDay91.monthLabel, "Month 4");
-assert.equal(coachDay91.position.programDay, 91);
+assert.equal(coachDay91.blockLabel, "LoadLine 180");
+assert.ok(!coachDay91.whereLine.includes("The Build"));
 assert.ok(!coachDay91.whereLine.includes("Identity"));
-assert.ok(!coachDay91.whereLine.includes("Day 90"));
-assert.equal(coachDay91.overnightOnly, false);
+assert.equal(coachDay91.overnightOnly, true);
 assert.equal(coachDay91.extendedFast24hInProtocol, false);
 
 const coachM7 = coachProgramSnapshot(START, "2027-02-28", "2027-02-27", true);
-assert.equal(coachM7.monthLabel, "Month 7");
-assert.equal(coachM7.extendedFast24hInProtocol, true);
+assert.equal(coachM7.blockLabel, "LoadLine 365");
+assert.equal(coachM7.extendedFast24hInProtocol, false);
 assert.equal(coachM7.extendedFast36hInProtocol, false);
-assert.match(coachM7.fastProtocolLabel, /24h in protocol/);
 
-const coachM8 = coachProgramSnapshot(START, "2027-03-30", "2027-03-29", false);
-assert.equal(coachM8.extendedFast24hInProtocol, true);
-assert.equal(coachM8.extendedFast36hInProtocol, true);
-assert.equal(coachM8.physicianClearedExtendedFasts, false);
-
-const coachMastery = coachProgramSnapshot(START, "2027-11-30", "2027-11-29", true);
-assert.equal(coachMastery.blockLabel, "Mastery");
-assert.equal(coachMastery.monthLabel, "Month 15");
+const coachNomad = coachProgramSnapshot(START, "2027-09-01", "2027-08-31", true);
+assert.equal(coachNomad.blockLabel, "NOMAD");
+assert.ok(!/No Excuses Nomad/.test(coachNomad.blockLabel));
 
 assert.equal(isMissingLog(null, "2026-08-27"), true);
 assert.equal(isMissingLog("2026-08-27", "2026-08-27"), false);
@@ -244,16 +285,14 @@ const missing = coachProgramSnapshot(START, "2026-08-27", null, false);
 assert.equal(missing.missingLog, true);
 assert.equal(missing.daysSinceCheckIn, null);
 
-// --- Staff ops helpers (Day 90 interview + Day 1 readiness) ---
 assert.equal(isBeforeDay1(aug27.block), true);
 assert.equal(isBeforeDay1(sep1.block), false);
-assert.equal(isBeforeDay1(day91.block), false);
+assert.equal(isBeforeDay1(oct1.block), false);
 assert.equal(day90InterviewStatus(aug27), "not_yet");
 assert.equal(day90InterviewStatus(sep1), "not_yet");
-assert.equal(day90InterviewStatus(getProgramPosition(START, "2026-11-22")), "upcoming");
-assert.equal(day90InterviewStatus(day90), "due");
-assert.equal(day90InterviewStatus(day91), "due");
-assert.equal(formatMonthLabel(aug27), "Runway 10/14");
-assert.equal(formatMonthLabel(sep1), "Month 1 of 15");
+assert.equal(day90InterviewStatus(nov29), "not_yet");
+assert.equal(formatMonthLabel(aug27), "Boot Camp 10/14");
+assert.equal(formatMonthLabel(sep1), "Day 1 of 30");
+assert.equal(formatMonthLabel(oct1), "LoadLine 60");
 
 console.log("program-position tests passed");

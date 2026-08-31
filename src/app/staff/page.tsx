@@ -121,14 +121,13 @@ export default async function StaffHousePage() {
     <>
       <section className="mb-8">
         <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          Staff · No Excuses Reset Program
+          Staff · LoadLine
         </p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">
           Program ops
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          All clients and coaches · block/month · Day 1 readiness · missing logs · clearance · Day 90 interviews.
-          This is not a daily log. Open a client or coach view on purpose to see their house.
+          All clients and coaches · phase · Day 1 readiness · missing logs. This is not a daily log.
         </p>
       </section>
 
@@ -183,7 +182,7 @@ export default async function StaffHousePage() {
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Not ready for Day 1</CardTitle>
-            <CardDescription>Still in Basic Training or not yet started. The Ninety Day 1 has not begun.</CardDescription>
+            <CardDescription>Still in Boot Camp analog or not yet started. LoadLine 30 Day 1 has not begun.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {notReady.map((c) => (
@@ -265,7 +264,7 @@ export default async function StaffHousePage() {
       <Card>
         <CardHeader>
           <CardTitle>All clients</CardTitle>
-          <CardDescription>15-month position from startDate (Day 1 of The Ninety). Open as client to see their house.</CardDescription>
+          <CardDescription>LoadLine phase from startDate (Day 1 of LoadLine 30). Open as client to see their house.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {ops.clients.map((c) => (

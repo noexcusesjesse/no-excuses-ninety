@@ -1,20 +1,13 @@
 /**
- * Fasting cycle logic for the No Excuses Reset.
+ * Fasting / meal-window logic for the live LoadLine path.
  *
- * Calendar-week-locked cycle: Reset Day + TRE days + overnight fasts.
- * The anchor day cannot also be a TRE day.
+ * LoadLine 30 packet: 14:10 meal window, last meal ~7:30–8:00 PM.
+ * 24h and 36h are not in protocol on this path, even if
+ * physicianClearedExtendedFasts is true. Do not flip that flag here.
  *
- * Block + month gates (applied before weekly cycle):
- *   - Basic Training and The Ninety: overnight + Saturday fasted walk only.
- *     No 24h, no 36h, no TRE — even if physicianClearedExtendedFasts is true.
- *   - 24h Reset: Month 7+ of The Build/Mastery, AND physician cleared.
- *   - 36h: Month 8+, cleared, AND resetVariant === extended_36hr.
- *   - 72h is retired. LoadLine does not prescribe, dose, or adjust medications.
- *
- * See src/lib/program-position.ts for 15-month day math.
+ * 72h is retired. LoadLine does not prescribe, dose, or adjust medications.
  */
 import {
-  isOvernightOnlyBlock,
   utcDayOfWeek,
   type ProgramPosition,
 } from "./program-position";
@@ -49,7 +42,7 @@ export const FAST_TYPE_META: Record<
   reset_24hr: { label: "Reset Day (24h)", targetHours: 24, maxHours: 24, color: "#b5654a" },
   tre_16_8: { label: "16:8 TRE", targetHours: 16, maxHours: 16, color: "#4f8f83" },
   overnight_12_14: { label: "Overnight (12–14h)", targetHours: 13, maxHours: 14, color: "#5a7fa6" },
-  pre_14_10: { label: "Pre-Phase (14:10)", targetHours: 14, maxHours: 14, color: "#c99a4b" },
+  pre_14_10: { label: "Meal window (14:10)", targetHours: 14, maxHours: 14, color: "#c99a4b" },
   pre_12_12: { label: "Pre-Phase (12:12)", targetHours: 12, maxHours: 12, color: "#c99a4b" },
 };
 
@@ -61,22 +54,10 @@ function allows36h(settings: FastingSettings, position: ProgramPosition): boolea
   );
 }
 
-function allows24h(settings: FastingSettings, position: ProgramPosition): boolean {
-  return (
-    settings.physicianClearedExtendedFasts &&
-    position.extendedFast24hEligibleByMonth
-  );
-}
-
 /**
- * Resolve a date's fast type.
+ * Resolve a date's meal-window type.
  *
- * Priority:
- * 1. Basic Training / The Ninety → overnight_12_14 (no 24h/36h/TRE)
- * 2. Pre-Phase ramp override (Build/Mastery only)
- * 3. Anchor day → reset_24hr if month-eligible AND physician-cleared; else TRE
- * 4. TRE day → tre_16_8
- * 5. Everything else → overnight_12_14
+ * Live LoadLine path: 14:10. Never 24h, never 36h.
  */
 export function getDayType(
   date: Date,
@@ -84,36 +65,11 @@ export function getDayType(
   preRamp: PreRamp | null,
   position: ProgramPosition,
 ): FastType {
-  const dateISO = position.asOf || date.toISOString().slice(0, 10);
-
-  if (isOvernightOnlyBlock(position.block) || position.block === "before" || position.block === "complete") {
-    return "overnight_12_14";
-  }
-
-  // Pre-Phase ramp override (never used to sneak 24h into The Ninety)
-  if (preRamp && dateISO < preRamp.targetAnchorDate) {
-    const dayBeforeTarget = new Date(preRamp.targetAnchorDate + "T00:00:00");
-    dayBeforeTarget.setDate(dayBeforeTarget.getDate() - 1);
-    if (dateISO === dayBeforeTarget.toISOString().slice(0, 10)) {
-      return "pre_12_12";
-    }
-    return "pre_14_10";
-  }
-
-  const dow = utcDayOfWeek(dateISO);
-
-  if (dow === settings.anchorDay) {
-    if (allows24h(settings, position)) {
-      return "reset_24hr";
-    }
-    return "tre_16_8";
-  }
-
-  if (settings.treDays.includes(dow)) {
-    return "tre_16_8";
-  }
-
-  return "overnight_12_14";
+  void date;
+  void settings;
+  void preRamp;
+  void position;
+  return "pre_14_10";
 }
 
 /**
@@ -287,7 +243,7 @@ export function getDayTypeLabel(
     return { type, label: `${dayName} · Overnight Fast (12–14h)`, color: meta.color };
   }
   if (type === "pre_14_10") {
-    return { type, label: `${dayName} · Pre-Phase (14:10)`, color: meta.color };
+    return { type, label: `${dayName} · Meal window 14:10`, color: meta.color };
   }
   if (type === "pre_12_12") {
     return { type, label: `${dayName} · Pre-Phase (12:12)`, color: meta.color };

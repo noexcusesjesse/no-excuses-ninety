@@ -132,7 +132,7 @@ export default async function CoachDashboardPage() {
         <section className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              Coach · No Excuses Reset Program
+              Coach · LoadLine
             </p>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">
               Your roster
@@ -242,7 +242,7 @@ export default async function CoachDashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>All clients</CardTitle>
-            <CardDescription>15-month Reset · click any client for their file</CardDescription>
+            <CardDescription>LoadLine phase from startDate · click any client for their file</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {clients.map((c) => (

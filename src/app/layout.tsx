@@ -16,9 +16,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "No Excuses Reset Program",
+  title: "LoadLine 30",
   description:
-    "Daily check-in, workouts, and tracking for the No Excuses Reset Program.",
+    "Daily check-in, HOME environments, and tracking for LoadLine 30.",
 };
 
 export default function RootLayout({

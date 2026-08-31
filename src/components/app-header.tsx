@@ -18,7 +18,7 @@ export async function AppHeader({ role }: { role: "client" | "coach" | "staff" }
               No Excuses
             </span>
             <span className="text-sm font-semibold tracking-tight">
-              Reset
+              {role === "client" ? "LoadLine 30" : "LoadLine"}
             </span>
           </div>
         </Link>
