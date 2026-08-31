@@ -1,68 +1,141 @@
 /**
- * Single source of truth for where a client is in the 15-month No Excuses Reset.
+ * Working clock for the live LoadLine path (America/Phoenix calendar dates).
  *
- * startDate = Day 1 of The Ninety.
- * Basic Training is the 14 calendar days immediately before startDate.
- * Protocol months are 30-day cycles from Day 1 (Month 1 = days 1–30).
+ * startDate = LoadLine 30 Day 1 (first cohort: 2026-09-01).
+ * Phase DATE WINDOWS are the clock — labels only after Day 30.
+ * Do not treat this as The Ninety, the 15-month Reset, Base Camp, or No Excuses Nomad.
+ * Do not paste an unstamped 365-row day-by-day file as signed protocol.
  *
- * Blocks:
- *   Basic Training — 14-day runway. Habit loop only. No extended fasts.
- *   The Ninety     — months 1–3 (days 1–90). Foundation / Build / Identity.
- *                    Deloads weeks 4, 8, 12. No 24h or 36h fasts.
- *   The Build      — months 4–14 (days 91–420).
- *   Mastery        — month 15 through the last calendar day of the 15th month
- *                    (first cohort: Nov 30, 2027).
+ * First-cohort windows:
+ *   Boot Camp analog  2026-08-18 – 2026-08-31  (done; not remapped; not Basic Training)
+ *   LoadLine 30       days 1–30    2026-09-01 – 2026-09-30
+ *   LoadLine 60       days 31–60   2026-10-01 – 2026-10-30
+ *   LoadLine 90       days 61–90   2026-10-31 – 2026-11-29
+ *   LoadLine 180      days 91–180  2026-11-30 – 2027-02-27
+ *   LoadLine 365      days 181–365 2027-02-28 – 2027-08-31
+ *   NOMAD             from 2027-09-01 (destination label only; never before Day 365)
  *
- * Extended fasting month gates (still require physicianClearedExtendedFasts):
- *   24h — Month 7 onward
- *   36h — Month 8 onward
- * Neither appears in Basic Training or The Ninety, even if cleared.
+ * 24h / 36h are out of protocol on this path.
  */
 
 export type ProgramBlock =
   | "before"
-  | "basicTraining"
-  | "ninety"
-  | "build"
-  | "mastery"
-  | "complete";
+  | "bootCamp"
+  | "loadLine30"
+  | "loadLine60"
+  | "loadLine90"
+  | "loadLine180"
+  | "loadLine365"
+  | "nomad";
 
+/** @deprecated Ninety phases are not the live path. Always null. */
 export type NinetyPhase = "Foundation" | "Build" | "Identity";
 export type WorkoutLetter = "A" | "B" | "REST";
+export type HomeEnvironment = "foundation" | "strength" | "condition" | "recovery";
 
-export const BASIC_TRAINING_DAYS = 14;
-export const NINETY_DAYS = 90;
+export const BOOT_CAMP_DAYS = 14;
+export const LOADLINE_30_DAYS = 30;
+export const LOADLINE_365_DAYS = 365;
 export const PROTOCOL_MONTH_DAYS = 30;
+export const FIRST_COHORT_DAY_ONE = "2026-09-01";
+
+/** Aliases so existing callers keep compiling. Boot Camp is 14 days before Day 1. */
+export const BASIC_TRAINING_DAYS = BOOT_CAMP_DAYS;
+export const NINETY_DAYS = 90;
 export const TOTAL_MONTHS = 15;
 export const FIRST_24H_MONTH = 7;
 export const FIRST_36H_MONTH = 8;
-export const FIRST_COHORT_DAY_ONE = "2026-09-01";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+/** Signed LoadLine 30 week shape — weekday repeating, not a 365-row calendar. */
+export const HOME_ENVIRONMENTS: Record<HomeEnvironment, { label: string; hint: string }> = {
+  foundation: {
+    label: "Foundation",
+    hint: "Warm-up, mobility, bands, bodyweight, balance, core",
+  },
+  strength: {
+    label: "Strength",
+    hint: "Bands + bodyweight",
+  },
+  condition: {
+    label: "Condition",
+    hint: "Walking time + steps",
+  },
+  recovery: {
+    label: "Recovery",
+    hint: "Stretch, breathing, easy walk",
+  },
+};
+
+export const LOADLINE_FORMULA = "TRAIN → MOVE → RECOVER → TRACK → REPEAT";
+export const MEAL_WINDOW_LABEL = "14:10";
+export const LAST_MEAL_WINDOW = "about 7:30–8:00 PM";
+export const SAFETY_LINE =
+  "If something feels off: stop / contact physician / follow what he already told you. Not medical advice. LoadLine does not prescribe, dose, or adjust medications.";
+
+export interface WeekShapeDay {
+  dayLabel: (typeof DAY_LABELS)[number];
+  environment: HomeEnvironment;
+  walkMinutes: number;
+  walkNote: string;
+  extra: string;
+  stretchMinutes: number;
+  isWeighIn: boolean;
+}
+
+export const LOADLINE_30_WEEK: WeekShapeDay[] = [
+  { dayLabel: "Mon", environment: "strength", walkMinutes: 30, walkNote: "Walk 30 min", extra: "10 min stretch", stretchMinutes: 10, isWeighIn: false },
+  { dayLabel: "Tue", environment: "foundation", walkMinutes: 30, walkNote: "Walk 30 min", extra: "Foundation or walk only", stretchMinutes: 0, isWeighIn: false },
+  { dayLabel: "Wed", environment: "strength", walkMinutes: 30, walkNote: "Walk 30 min", extra: "Stretch", stretchMinutes: 10, isWeighIn: false },
+  { dayLabel: "Thu", environment: "condition", walkMinutes: 30, walkNote: "Walk 30 min", extra: "Walk", stretchMinutes: 0, isWeighIn: false },
+  { dayLabel: "Fri", environment: "strength", walkMinutes: 30, walkNote: "Walk 30 min", extra: "Stretch", stretchMinutes: 10, isWeighIn: false },
+  { dayLabel: "Sat", environment: "condition", walkMinutes: 60, walkNote: "Longer walk up to 60 min", extra: "", stretchMinutes: 0, isWeighIn: false },
+  { dayLabel: "Sun", environment: "recovery", walkMinutes: 25, walkNote: "Easy 20–30 min", extra: "Weigh-in (weight/waist)", stretchMinutes: 0, isWeighIn: true },
+];
+
+interface PhaseWindow {
+  block: Exclude<ProgramBlock, "before" | "bootCamp" | "nomad">;
+  firstDay: number;
+  lastDay: number;
+}
+
+/** Day-number windows from startDate. First-cohort ISO dates are comments only. */
+const PHASE_WINDOWS: PhaseWindow[] = [
+  { block: "loadLine30", firstDay: 1, lastDay: 30 }, // 2026-09-01 – 2026-09-30
+  { block: "loadLine60", firstDay: 31, lastDay: 60 }, // 2026-10-01 – 2026-10-30
+  { block: "loadLine90", firstDay: 61, lastDay: 90 }, // 2026-10-31 – 2026-11-29
+  { block: "loadLine180", firstDay: 91, lastDay: 180 }, // 2026-11-30 – 2027-02-27
+  { block: "loadLine365", firstDay: 181, lastDay: 365 }, // 2027-02-28 – 2027-08-31
+];
 
 export interface ProgramPosition {
   asOf: string;
   startDate: string;
+  bootCampStartDate: string;
+  loadLine30EndDate: string;
+  loadLine365EndDate: string;
+  /** Alias of bootCampStartDate — Boot Camp analog, not Basic Training. */
   basicTrainingStartDate: string;
+  /** Day 90 calendar date (LoadLine 90 end). Not The Ninety. */
   ninetyEndDate: string;
+  /** Day 365 calendar date. Not a 15-month Reset end. */
   programEndDate: string;
   block: ProgramBlock;
-  /** 1–15 once Day 1 has begun; null during Basic Training / before. */
+  /** Unused 15-month clock. Always null on the live path. */
   programMonth: number | null;
-  /** 1–30 inside a protocol month (month 15 may run longer than 30). */
+  /** Day inside a 30-day phase (LL30/60/90); null for longer windows so we do not imply a 365-day UI. */
   dayInMonth: number | null;
   dayInBlock: number;
   daysInBlock: number;
   /**
    * 1-indexed day from startDate. Negative or zero before Day 1.
-   * Not clamped to 90.
+   * Used for phase windows only — not a 365-row protocol index.
    */
   programDay: number;
   ninetyPhase: NinetyPhase | null;
-  /** Protocol week 1–13 during The Ninety. */
   ninetyWeek: number | null;
   isDeload: boolean;
-  /** Month gate only — physician clearance is applied in fasting logic. */
   extendedFast24hEligibleByMonth: boolean;
   extendedFast36hEligibleByMonth: boolean;
 }
@@ -74,6 +147,12 @@ export interface DayPlan {
   walkMinutes: number;
   isFastedWalk: boolean;
   isDeload: boolean;
+  environment: HomeEnvironment;
+  stretchMinutes: number;
+  isWeighIn: boolean;
+  isDay1Calibration: boolean;
+  walkNote: string;
+  extra: string;
 }
 
 export function parseISODate(iso: string): Date {
@@ -105,18 +184,23 @@ export function utcDayOfWeek(iso: string): number {
   return parseISODate(iso).getUTCDay();
 }
 
-/**
- * Last calendar day of the Nth protocol month, where month 1 is startDate's month.
- * First cohort (Day 1 = 2026-09-01, N = 15) → 2027-11-30.
- */
 export function lastDayOfProtocolCalendarMonth(startDate: string, monthNumber: number): string {
   const [y, m] = startDate.split("-").map(Number);
   const end = new Date(Date.UTC(y, m - 1 + (monthNumber - 1) + 1, 0));
   return formatISODate(end);
 }
 
+export function bootCampStartDate(startDate: string): string {
+  return addDays(startDate, -BOOT_CAMP_DAYS);
+}
+
+/** @deprecated Use bootCampStartDate. Same instant: 14 days before LoadLine 30 Day 1. */
 export function basicTrainingStartDate(startDate: string): string {
-  return addDays(startDate, -BASIC_TRAINING_DAYS);
+  return bootCampStartDate(startDate);
+}
+
+export function loadLine30EndDate(startDate: string): string {
+  return addDays(startDate, LOADLINE_30_DAYS - 1);
 }
 
 export function ninetyEndDate(startDate: string): string {
@@ -124,65 +208,55 @@ export function ninetyEndDate(startDate: string): string {
 }
 
 export function programEndDate(startDate: string): string {
-  return lastDayOfProtocolCalendarMonth(startDate, TOTAL_MONTHS);
+  return addDays(startDate, LOADLINE_365_DAYS - 1);
 }
 
-function ninetyPhaseForDay(programDay: number): NinetyPhase {
-  if (programDay <= 30) return "Foundation";
-  if (programDay <= 60) return "Build";
-  return "Identity";
+function phaseForProgramDay(programDay: number): PhaseWindow | null {
+  return PHASE_WINDOWS.find((p) => programDay >= p.firstDay && programDay <= p.lastDay) ?? null;
 }
 
-export function isOvernightOnlyBlock(block: ProgramBlock): boolean {
-  return block === "basicTraining" || block === "ninety";
+function emptyGates() {
+  return {
+    ninetyPhase: null as NinetyPhase | null,
+    ninetyWeek: null as number | null,
+    isDeload: false,
+    extendedFast24hEligibleByMonth: false,
+    extendedFast36hEligibleByMonth: false,
+    programMonth: null as number | null,
+  };
+}
+
+export function isOvernightOnlyBlock(_block: ProgramBlock): boolean {
+  return true;
 }
 
 export function getProgramPosition(startDate: string, asOf: string): ProgramPosition {
-  const btStart = basicTrainingStartDate(startDate);
-  const ninetyEnd = ninetyEndDate(startDate);
-  const end = programEndDate(startDate);
+  const btStart = bootCampStartDate(startDate);
+  const ll30End = loadLine30EndDate(startDate);
+  const ll90End = ninetyEndDate(startDate);
+  const ll365End = programEndDate(startDate);
   const programDay = diffDays(startDate, asOf) + 1;
 
   const base = {
     asOf,
     startDate,
+    bootCampStartDate: btStart,
+    loadLine30EndDate: ll30End,
+    loadLine365EndDate: ll365End,
     basicTrainingStartDate: btStart,
-    ninetyEndDate: ninetyEnd,
-    programEndDate: end,
+    ninetyEndDate: ll90End,
+    programEndDate: ll365End,
   };
 
   if (asOf < btStart) {
     return {
       ...base,
       block: "before",
-      programMonth: null,
       dayInMonth: null,
       dayInBlock: 0,
       daysInBlock: 0,
       programDay,
-      ninetyPhase: null,
-      ninetyWeek: null,
-      isDeload: false,
-      extendedFast24hEligibleByMonth: false,
-      extendedFast36hEligibleByMonth: false,
-    };
-  }
-
-  if (asOf > end) {
-    const totalDays = diffDays(startDate, end) + 1;
-    return {
-      ...base,
-      block: "complete",
-      programMonth: TOTAL_MONTHS,
-      dayInMonth: PROTOCOL_MONTH_DAYS,
-      dayInBlock: totalDays,
-      daysInBlock: totalDays,
-      programDay,
-      ninetyPhase: null,
-      ninetyWeek: null,
-      isDeload: false,
-      extendedFast24hEligibleByMonth: false,
-      extendedFast36hEligibleByMonth: false,
+      ...emptyGates(),
     };
   }
 
@@ -190,101 +264,89 @@ export function getProgramPosition(startDate: string, asOf: string): ProgramPosi
     const dayInBlock = diffDays(btStart, asOf) + 1;
     return {
       ...base,
-      block: "basicTraining",
-      programMonth: null,
+      block: "bootCamp",
       dayInMonth: null,
       dayInBlock,
-      daysInBlock: BASIC_TRAINING_DAYS,
+      daysInBlock: BOOT_CAMP_DAYS,
       programDay,
-      ninetyPhase: null,
-      ninetyWeek: null,
-      isDeload: false,
-      extendedFast24hEligibleByMonth: false,
-      extendedFast36hEligibleByMonth: false,
+      ...emptyGates(),
     };
   }
 
-  if (programDay <= NINETY_DAYS) {
-    const programMonth = Math.ceil(programDay / PROTOCOL_MONTH_DAYS);
-    const ninetyWeek = Math.ceil(programDay / 7);
+  if (programDay > LOADLINE_365_DAYS) {
     return {
       ...base,
-      block: "ninety",
-      programMonth,
-      dayInMonth: ((programDay - 1) % PROTOCOL_MONTH_DAYS) + 1,
-      dayInBlock: programDay,
-      daysInBlock: NINETY_DAYS,
+      block: "nomad",
+      dayInMonth: null,
+      dayInBlock: programDay - LOADLINE_365_DAYS,
+      daysInBlock: 0,
       programDay,
-      ninetyPhase: ninetyPhaseForDay(programDay),
-      ninetyWeek,
-      isDeload: ninetyWeek === 4 || ninetyWeek === 8 || ninetyWeek === 12,
-      extendedFast24hEligibleByMonth: false,
-      extendedFast36hEligibleByMonth: false,
+      ...emptyGates(),
     };
   }
 
-  const month15Start = addDays(startDate, 14 * PROTOCOL_MONTH_DAYS); // Day 421
-  if (asOf < month15Start) {
-    const programMonth = Math.ceil(programDay / PROTOCOL_MONTH_DAYS);
+  const phase = phaseForProgramDay(programDay);
+  if (!phase) {
     return {
       ...base,
-      block: "build",
-      programMonth,
-      dayInMonth: ((programDay - 1) % PROTOCOL_MONTH_DAYS) + 1,
-      dayInBlock: programDay - NINETY_DAYS,
-      daysInBlock: 14 * PROTOCOL_MONTH_DAYS - NINETY_DAYS,
+      block: "before",
+      dayInMonth: null,
+      dayInBlock: 0,
+      daysInBlock: 0,
       programDay,
-      ninetyPhase: null,
-      ninetyWeek: null,
-      isDeload: false,
-      extendedFast24hEligibleByMonth: programMonth >= FIRST_24H_MONTH,
-      extendedFast36hEligibleByMonth: programMonth >= FIRST_36H_MONTH,
+      ...emptyGates(),
     };
   }
 
-  const dayInBlock = diffDays(month15Start, asOf) + 1;
-  const daysInBlock = diffDays(month15Start, end) + 1;
-  const dayInMonth =
-    programDay > 14 * PROTOCOL_MONTH_DAYS
-      ? Math.min(PROTOCOL_MONTH_DAYS, ((Math.min(programDay, 15 * PROTOCOL_MONTH_DAYS) - 1) % PROTOCOL_MONTH_DAYS) + 1)
-      : ((programDay - 1) % PROTOCOL_MONTH_DAYS) + 1;
+  const daysInBlock = phase.lastDay - phase.firstDay + 1;
+  const dayInBlock = programDay - phase.firstDay + 1;
+  const dayInMonth = daysInBlock === PROTOCOL_MONTH_DAYS ? dayInBlock : null;
 
   return {
     ...base,
-    block: "mastery",
-    programMonth: TOTAL_MONTHS,
+    block: phase.block,
     dayInMonth,
     dayInBlock,
     daysInBlock,
     programDay,
-    ninetyPhase: null,
-    ninetyWeek: null,
-    isDeload: false,
-    extendedFast24hEligibleByMonth: true,
-    extendedFast36hEligibleByMonth: true,
+    ...emptyGates(),
   };
 }
 
+function weekShapeForDow(dow: number): WeekShapeDay {
+  if (dow === 0) return LOADLINE_30_WEEK[6];
+  return LOADLINE_30_WEEK[dow - 1];
+}
+
 /**
- * Calendar-weekday plan. Saturday = 60-min fasted walk.
- * Mon/Wed/Fri = Workout A/B alternating by protocol week from Day 1.
- * Deload is protocol-week based (The Ninety weeks 4, 8, 12 only).
+ * Signed LoadLine 30 week shape by weekday.
+ * Day 1 (Tue Sep 1 first cohort): band calibration + Foundation + walk — not Strength.
+ * No Ninety deloads. Saturday is a longer walk, not a fasted-walk protocol.
  */
 export function getDayPlan(position: ProgramPosition): DayPlan {
   const iso = position.asOf;
   const dow = utcDayOfWeek(iso);
-  const protocolWeek = position.programDay >= 1 ? Math.ceil(position.programDay / 7) : 1;
+  const shape = weekShapeForDow(dow);
+  const isDay1Calibration = position.programDay === 1;
+  const environment: HomeEnvironment = isDay1Calibration ? "foundation" : shape.environment;
   let workout: WorkoutLetter = "REST";
-  if (dow === 1 || dow === 3 || dow === 5) {
-    workout = protocolWeek % 2 === 1 ? "A" : "B";
-  }
+  if (environment === "strength") workout = "A";
+
   return {
     date: iso,
     dayLabel: DAY_LABELS[dow],
     workout,
-    walkMinutes: dow === 6 ? 60 : dow === 0 ? 25 : 30,
-    isFastedWalk: dow === 6,
-    isDeload: position.isDeload,
+    walkMinutes: shape.walkMinutes,
+    isFastedWalk: false,
+    isDeload: false,
+    environment,
+    stretchMinutes: isDay1Calibration ? 0 : shape.stretchMinutes,
+    isWeighIn: shape.isWeighIn,
+    isDay1Calibration,
+    walkNote: shape.walkNote,
+    extra: isDay1Calibration
+      ? "Band calibration, then Foundation + walk. Not a hero Strength session."
+      : shape.extra,
   };
 }
 
@@ -292,44 +354,44 @@ export function blockLabel(block: ProgramBlock): string {
   switch (block) {
     case "before":
       return "Not yet started";
-    case "basicTraining":
-      return "Basic Training";
-    case "ninety":
-      return "The Ninety";
-    case "build":
-      return "The Build";
-    case "mastery":
-      return "Mastery";
-    case "complete":
-      return "Reset complete";
+    case "bootCamp":
+      return "Boot Camp";
+    case "loadLine30":
+      return "LoadLine 30";
+    case "loadLine60":
+      return "LoadLine 60";
+    case "loadLine90":
+      return "LoadLine 90";
+    case "loadLine180":
+      return "LoadLine 180";
+    case "loadLine365":
+      return "LoadLine 365";
+    case "nomad":
+      return "NOMAD";
   }
 }
 
 export function isBeforeDay1(block: ProgramBlock): boolean {
-  return block === "before" || block === "basicTraining";
+  return block === "before" || block === "bootCamp";
 }
 
 export type Day90InterviewStatus = "not_yet" | "upcoming" | "due";
 
-/**
- * The Ninety ends on ninetyEndDate (first cohort: Nov 29 2026).
- * Exit interview is due that day and after. Upcoming = last 7 days of The Ninety.
- */
+/** The Ninety is not the live path. No Day 90 interview clock. */
 export function day90InterviewStatus(
-  position: ProgramPosition,
-  upcomingWindowDays = 7,
+  _position: ProgramPosition,
+  _upcomingWindowDays = 7,
 ): Day90InterviewStatus {
-  if (position.asOf >= position.ninetyEndDate) return "due";
-  const daysLeft = diffDays(position.asOf, position.ninetyEndDate);
-  if (daysLeft <= upcomingWindowDays) return "upcoming";
   return "not_yet";
 }
 
 export function formatMonthLabel(position: ProgramPosition): string {
-  if (position.block === "basicTraining") {
-    return `Runway ${position.dayInBlock}/${position.daysInBlock}`;
+  if (position.block === "bootCamp") {
+    return `Boot Camp ${position.dayInBlock}/${position.daysInBlock}`;
   }
-  if (position.programMonth) return `Month ${position.programMonth} of ${TOTAL_MONTHS}`;
+  if (position.block === "loadLine30") {
+    return `Day ${position.dayInBlock} of ${LOADLINE_30_DAYS}`;
+  }
   return blockLabel(position.block);
 }
 
@@ -342,75 +404,65 @@ export function formatDateShort(iso: string): string {
   });
 }
 
-/** Eyebrow / kicker on Client pages. Never "Day N of 90" as the only identity. */
 export function formatPositionKicker(position: ProgramPosition, dayLabel: string): string {
   const block = blockLabel(position.block);
-  if (position.block === "basicTraining") {
-    return `${dayLabel} · ${block} · Runway day ${position.dayInBlock} of ${position.daysInBlock}`;
+  if (position.block === "bootCamp") {
+    return `${dayLabel} · ${block} · Day ${position.dayInBlock} of ${position.daysInBlock}`;
   }
-  if (position.block === "ninety") {
-    return `${dayLabel} · ${block} · Month ${position.programMonth} ${position.ninetyPhase}`;
-  }
-  if (position.block === "build" || position.block === "mastery") {
-    return `${dayLabel} · ${block} · Month ${position.programMonth} of ${TOTAL_MONTHS}`;
+  if (position.block === "loadLine30") {
+    return `${dayLabel} · ${block} · Day ${position.dayInBlock} of ${LOADLINE_30_DAYS}`;
   }
   if (position.block === "before") {
-    return `${dayLabel} · Basic Training starts ${formatDateShort(position.basicTrainingStartDate)}`;
+    return `${dayLabel} · Boot Camp starts ${formatDateShort(position.bootCampStartDate)}`;
   }
   return `${dayLabel} · ${block}`;
 }
 
 export function formatPositionSecondary(position: ProgramPosition): string | null {
-  if (position.block === "basicTraining" || position.block === "before") {
-    return `The Ninety starts ${formatDateShort(position.startDate)}`;
+  if (position.block === "bootCamp" || position.block === "before") {
+    return `LoadLine 30 starts ${formatDateShort(position.startDate)}`;
   }
-  if (position.block === "ninety") {
-    return `Day ${position.programDay} of ${NINETY_DAYS}`;
+  if (position.block === "loadLine30") {
+    return `Day ${position.programDay} of ${LOADLINE_30_DAYS}`;
   }
-  if (position.block === "build") {
-    return `Day ${position.dayInMonth} of 30 · Month ${position.programMonth} of ${TOTAL_MONTHS}`;
+  if (position.block === "nomad") {
+    return null;
   }
-  if (position.block === "mastery") {
-    return `Program ends ${formatDateShort(position.programEndDate)}`;
-  }
-  return null;
+  const phase = PHASE_WINDOWS.find((p) => p.block === position.block);
+  if (!phase) return null;
+  const start = addDays(position.startDate, phase.firstDay - 1);
+  const end = addDays(position.startDate, phase.lastDay - 1);
+  return `${formatDateShort(start)} – ${formatDateShort(end)}`;
 }
 
-/** Month 1–15 after Day 1; Pre-Day 1 during Basic Training / before. */
 export function monthLabel(position: ProgramPosition): string {
-  if (position.programMonth == null) return "Pre-Day 1";
-  return `Month ${position.programMonth}`;
+  if (position.block === "before" || position.block === "bootCamp") return "Pre-Day 1";
+  return blockLabel(position.block);
 }
 
 export function formatDayInBlock(position: ProgramPosition): string {
   if (position.block === "before") return "Not started";
-  if (position.block === "complete") return "Complete";
-  return `Day ${position.dayInBlock} of ${position.daysInBlock}`;
+  if (position.block === "nomad") return "NOMAD";
+  if (position.block === "loadLine30") {
+    return `Day ${position.dayInBlock} of ${position.daysInBlock}`;
+  }
+  if (position.block === "bootCamp") {
+    return `Day ${position.dayInBlock} of ${position.daysInBlock}`;
+  }
+  return blockLabel(position.block);
 }
 
-/**
- * Coach roster / file identity. Block + month + day-in-block.
- * Never "Day N of 90" as the only identity.
- */
 export function formatCoachWhere(position: ProgramPosition): string {
   const block = blockLabel(position.block);
-  const month = monthLabel(position);
-  if (position.block === "basicTraining") {
-    return `${block} · ${month} · ${formatDayInBlock(position)}`;
+  if (position.block === "bootCamp") {
+    return `${block} · Pre-Day 1 · ${formatDayInBlock(position)}`;
   }
-  if (position.block === "ninety") {
-    return `${block} · ${month} ${position.ninetyPhase} · ${formatDayInBlock(position)}`;
-  }
-  if (position.block === "build" || position.block === "mastery") {
-    return `${block} · ${month} of ${TOTAL_MONTHS} · ${formatDayInBlock(position)}`;
-  }
-  if (position.block === "before") {
-    return `${block} · ${month}`;
+  if (position.block === "loadLine30") {
+    return `${block} · ${formatDayInBlock(position)}`;
   }
   return block;
 }
 
-/** No check-in, or last check-in is more than one calendar day before asOf. */
 export function isMissingLog(lastCheckIn: string | null, asOf: string): boolean {
   if (!lastCheckIn) return true;
   return diffDays(lastCheckIn, asOf) > 1;
@@ -420,57 +472,22 @@ export interface ExtendedFastProtocol {
   overnightOnly: boolean;
   month24hEligible: boolean;
   month36hEligible: boolean;
-  /** Month gate only — physician clearance is a separate flag. */
   inProtocol24h: boolean;
   inProtocol36h: boolean;
   label: string;
   shortLabel: string;
 }
 
-/**
- * Whether 24h/36h are even in-protocol for this block/month.
- * Does not consult physicianClearedExtendedFasts.
- */
 export function extendedFastProtocol(position: ProgramPosition): ExtendedFastProtocol {
-  const overnightOnly =
-    isOvernightOnlyBlock(position.block) ||
-    position.block === "before" ||
-    position.block === "complete";
-  const month24hEligible = position.extendedFast24hEligibleByMonth;
-  const month36hEligible = position.extendedFast36hEligibleByMonth;
-  const inProtocol24h = month24hEligible && !overnightOnly;
-  const inProtocol36h = month36hEligible && !overnightOnly;
-
-  let label: string;
-  let shortLabel: string;
-  if (position.block === "basicTraining") {
-    label = "Overnight only · 24h/36h not in protocol (Basic Training)";
-    shortLabel = "Overnight only";
-  } else if (position.block === "ninety") {
-    label = "Overnight only · 24h/36h not in protocol (The Ninety)";
-    shortLabel = "Overnight only";
-  } else if (position.block === "before" || position.block === "complete") {
-    label = "Overnight only · 24h/36h not in protocol";
-    shortLabel = "Overnight only";
-  } else if (inProtocol36h) {
-    label = "24h in protocol · 36h eligible (Month 8+, extended_36hr only)";
-    shortLabel = "24h in protocol";
-  } else if (inProtocol24h) {
-    label = "24h in protocol (Month 7+) · 36h from Month 8";
-    shortLabel = "24h in protocol";
-  } else {
-    label = "Overnight/TRE · 24h from Month 7, 36h from Month 8";
-    shortLabel = "No 24h yet";
-  }
-
+  const name = blockLabel(position.block);
   return {
-    overnightOnly,
-    month24hEligible,
-    month36hEligible,
-    inProtocol24h,
-    inProtocol36h,
-    label,
-    shortLabel,
+    overnightOnly: true,
+    month24hEligible: false,
+    month36hEligible: false,
+    inProtocol24h: false,
+    inProtocol36h: false,
+    label: `Meal window 14:10 · 24h/36h not in protocol (${name})`,
+    shortLabel: "14:10 meal window",
   };
 }
 
@@ -490,10 +507,6 @@ export interface CoachProgramSnapshot {
   fastProtocolShort: string;
 }
 
-/**
- * Single snapshot for Coach roster + client file. Reuses getProgramPosition —
- * no second calendar, no 90-day clamp.
- */
 export function coachProgramSnapshot(
   startDate: string,
   asOf: string,
@@ -521,56 +534,60 @@ export function coachProgramSnapshot(
 }
 
 export function journeyProgress(position: ProgramPosition): { percent: number; label: string } {
-  if (position.block === "before") return { percent: 0, label: "RESET" };
-  if (position.block === "basicTraining") {
+  if (position.block === "before") return { percent: 0, label: "LOADLINE" };
+  if (position.block === "bootCamp") {
     return {
-      percent: Math.round(((position.dayInBlock - 1) / BASIC_TRAINING_DAYS) * 100),
-      label: "RUNWAY",
+      percent: Math.round(((position.dayInBlock - 1) / BOOT_CAMP_DAYS) * 100),
+      label: "BOOT CAMP",
     };
   }
-  if (position.block === "complete") return { percent: 100, label: "RESET" };
-  const monthsDone = (position.programMonth ?? 1) - 1;
-  const monthFrac = ((position.dayInMonth ?? 1) - 1) / PROTOCOL_MONTH_DAYS;
-  return {
-    percent: Math.min(100, Math.round(((monthsDone + monthFrac) / TOTAL_MONTHS) * 100)),
-    label: "RESET",
-  };
+  if (position.block === "loadLine30") {
+    return {
+      percent: Math.round(((position.dayInBlock - 1) / LOADLINE_30_DAYS) * 100),
+      label: "LL30",
+    };
+  }
+  if (position.block === "nomad") return { percent: 100, label: "NOMAD" };
+  return { percent: 0, label: blockLabel(position.block).replace("LoadLine ", "LL") };
 }
 
-/** Index into the 30-day meal-theme rotation. */
 export function mealThemeDayIndex(position: ProgramPosition): number {
-  if (position.block === "basicTraining") return Math.max(0, position.dayInBlock - 1);
+  if (position.block === "bootCamp") return Math.max(0, position.dayInBlock - 1);
   if (position.dayInMonth != null) return position.dayInMonth - 1;
-  return 0;
+  if (position.block === "loadLine30") return Math.max(0, position.dayInBlock - 1);
+  return Math.max(0, (position.programDay - 1) % PROTOCOL_MONTH_DAYS);
 }
 
 export function currentMonthWindow(position: ProgramPosition): { start: string; end: string; day: number; of: number } {
-  if (position.block === "basicTraining" || position.block === "before") {
+  if (position.block === "bootCamp" || position.block === "before") {
     return {
-      start: position.basicTrainingStartDate,
+      start: position.bootCampStartDate,
       end: addDays(position.startDate, -1),
       day: Math.max(1, position.dayInBlock),
-      of: BASIC_TRAINING_DAYS,
+      of: BOOT_CAMP_DAYS,
     };
   }
-  if (position.block === "complete") {
+  if (position.block === "nomad") {
     return {
-      start: position.startDate,
-      end: position.programEndDate,
+      start: addDays(position.startDate, LOADLINE_365_DAYS),
+      end: addDays(position.startDate, LOADLINE_365_DAYS),
       day: 1,
       of: 1,
     };
   }
-  const month = position.programMonth ?? 1;
-  const start = addDays(position.startDate, (month - 1) * PROTOCOL_MONTH_DAYS);
-  const protocolEnd = addDays(start, PROTOCOL_MONTH_DAYS - 1);
-  const end = position.block === "mastery"
-    ? position.programEndDate
-    : protocolEnd;
+  const phase = PHASE_WINDOWS.find((p) => p.block === position.block);
+  if (!phase) {
+    return {
+      start: position.startDate,
+      end: position.loadLine30EndDate,
+      day: 1,
+      of: LOADLINE_30_DAYS,
+    };
+  }
   return {
-    start,
-    end,
-    day: position.dayInMonth ?? 1,
-    of: PROTOCOL_MONTH_DAYS,
+    start: addDays(position.startDate, phase.firstDay - 1),
+    end: addDays(position.startDate, phase.lastDay - 1),
+    day: position.dayInBlock,
+    of: position.daysInBlock,
   };
 }

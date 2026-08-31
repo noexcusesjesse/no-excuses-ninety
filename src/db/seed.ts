@@ -1,10 +1,9 @@
 /**
- * Seed the DB with: 1 staff (Jesse, ops), 1 coach, 6 clients, The Ninety 1–90
- * template, and daily check-ins per client.
+ * Seed the DB with: 1 staff (Jesse, ops), 1 coach, 6 clients, program_days template,
+ * and daily check-ins per client.
  *
- * First-cohort default: Marcus startDate = 2026-09-01 (Day 1 of The Ninety).
- * Basic Training is Aug 18–31. He is physician-cleared; 24h/36h still must not
- * appear until Month 7 / Month 8.
+ * First-cohort default: Marcus startDate = 2026-09-01 (LoadLine 30 Day 1).
+ * Boot Camp analog is Aug 18–31. Do not flip physicianClearedExtendedFasts here.
  *
  * Run: npm run db:seed (after npm run db:migrate)
  * Idempotent: staff is seeded independently; existing coach email skips clients.
@@ -130,7 +129,7 @@ export async function seedDatabase(): Promise<void> {
     return;
   }
 
-  console.log("Seeding The Ninety 1–90 template...");
+  console.log("Seeding program_days template...");
   const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const programRows = [];
   for (let day = 1; day <= 90; day++) {
@@ -211,7 +210,7 @@ export async function seedDatabase(): Promise<void> {
         });
       }
     } else {
-      // Still in Basic Training — baseline only, no fake Ninety-scale loss.
+      // Still in Boot Camp analog — baseline only.
       weightRows.push({
         id: randomUUID(), clientId, date: historyStart,
         weightLb: c.startWeight,

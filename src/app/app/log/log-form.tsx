@@ -64,15 +64,15 @@ export function LogForm({ theme }: { theme: MealTheme }) {
       <Card>
         <CardHeader>
           <CardTitle>Fasting</CardTitle>
-          <CardDescription>Fasting hours + window status</CardDescription>
+          <CardDescription>Meal window 14:10. Last meal about 7:30–8:00 PM. Not a 24h or 36h fast.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Fasting hours</label>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Meal-window hours</label>
             <input type="number" name="fastingHours" className="flex h-10 w-full rounded-md border border-border bg-input px-3 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" placeholder="0" />
           </div>
           <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">Fasting window</label>
+            <label className="mb-2 block text-xs font-medium text-muted-foreground">14:10 window</label>
             <div className="flex gap-2">
               <button type="button" className="flex-1 rounded-md border border-primary bg-primary/10 px-3 py-2 text-sm font-medium text-primary">Completed</button>
               <button type="button" className="flex-1 rounded-md border border-border bg-card px-3 py-2 text-sm text-muted-foreground hover:border-primary">Modified</button>

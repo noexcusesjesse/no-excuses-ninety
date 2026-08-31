@@ -25,6 +25,7 @@ import {
   todayISODate,
   type CoachProgramSnapshot,
   type Day90InterviewStatus,
+  type HomeEnvironment,
   type ProgramPosition,
 } from "@/lib/program-position";
 
@@ -45,6 +46,12 @@ export interface ClientToday {
     walkMinutes: number;
     isFastedWalk: boolean;
     isDeload: boolean;
+    environment: HomeEnvironment;
+    stretchMinutes: number;
+    isWeighIn: boolean;
+    isDay1Calibration: boolean;
+    walkNote: string;
+    extra: string;
   };
   workoutStreak: number;
   walkStreak: number;
@@ -113,8 +120,8 @@ export async function getClientToday(): Promise<ClientToday | null> {
     id: client.id,
     name: client.name.split(" ")[0],
     programDay: position.programDay,
-    weekNumber: position.ninetyWeek ?? position.programMonth ?? 0,
-    phase: position.ninetyPhase ?? blockLabel(position.block),
+    weekNumber: Math.max(1, Math.ceil(Math.max(position.programDay, 1) / 7)),
+    phase: blockLabel(position.block),
     startDate: client.startDate,
     position,
     plan: {
@@ -124,6 +131,12 @@ export async function getClientToday(): Promise<ClientToday | null> {
       walkMinutes: plan.walkMinutes,
       isFastedWalk: plan.isFastedWalk,
       isDeload: plan.isDeload,
+      environment: plan.environment,
+      stretchMinutes: plan.stretchMinutes,
+      isWeighIn: plan.isWeighIn,
+      isDay1Calibration: plan.isDay1Calibration,
+      walkNote: plan.walkNote,
+      extra: plan.extra,
     },
     workoutStreak,
     walkStreak,
@@ -495,8 +508,7 @@ export async function createClient(input: NewClientInput): Promise<string | null
     physicianClearedExtendedFasts: input.physicianClearedExtendedFasts ?? false,
     anchorDay: 1,
     treDays: "[3,5]",
-    // standard_24hr never schedules 24h during Basic Training or The Ninety —
-    // getDayType gates on block + month (Month 7+). Do not default to extended_36hr.
+    // 24h/36h are not scheduled on the live LoadLine path.
     resetVariant: "standard_24hr",
   });
 
@@ -692,7 +704,7 @@ export async function getCycleData(): Promise<CycleData | null> {
     avgCalories, avgProtein, avgSteps,
     exerciseSessions,
     proteinAdherencePct, stepsAdherencePct, fastingAdherencePct,
-    monthLabel: position.block === "basicTraining" ? "Basic Training" : `Month ${position.programMonth ?? "—"}`,
+    monthLabel: formatMonthLabel(position),
     monthOf: window.of,
     blockLabel: blockLabel(position.block),
   };

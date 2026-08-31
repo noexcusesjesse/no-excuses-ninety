@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * POST /api/coach/clients
- * Create a new client. startDate is Day 1 of The Ninety.
+ * Create a new client. startDate is LoadLine 30 Day 1.
  * Body: { name, email, startDate, startWeightLb, heightIn?, dateOfBirth?, physicianClearedExtendedFasts? }
  */
 export async function POST(req: NextRequest) {

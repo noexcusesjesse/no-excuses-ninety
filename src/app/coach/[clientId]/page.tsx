@@ -34,10 +34,6 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
   const trendDown = detail.weightTrend7d < 0;
   const totalLost = detail.startWeightLb - (detail.currentWeightLb ?? detail.startWeightLb);
   const goalWeight = 200;
-  const ninetyWeekLine =
-    pos.block === "ninety" && pos.ninetyWeek
-      ? `Wk ${pos.ninetyWeek} of 13${pos.isDeload ? " · Deload" : ""}`
-      : null;
 
   return (
     <>
@@ -51,17 +47,11 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              Coach · No Excuses Reset Program
+              Coach · LoadLine
             </p>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">{detail.name}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-muted-foreground">
               <span>{snap.whereLine}</span>
-              {ninetyWeekLine && (
-                <>
-                  <span>·</span>
-                  <span>{ninetyWeekLine}</span>
-                </>
-              )}
               <span>·</span>
               <span>Age: {detail.ageYears ?? "—"}</span>
             </div>
@@ -87,7 +77,7 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
             <p className="font-mono text-[10px] uppercase text-muted-foreground">Month</p>
             <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{snap.monthLabel}</p>
             <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-              {pos.programMonth ? `of 15` : "Before Day 1 of The Ninety"}
+              {formatDayInBlock(pos)}
             </p>
           </div>
           <div className="rounded-md border border-border bg-card p-3">
@@ -126,14 +116,13 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
           <CardContent className="space-y-2 text-sm">
             <p>{snap.fastProtocolLabel}</p>
             <p className="text-muted-foreground">
-              Clearance is stored separately from protocol. Even if the physician flag is on,
-              24h and 36h stay out of protocol during Basic Training and The Ninety.
-              First 24h is Month 7+ of The Build; first 36h is Month 8+ and only with the extended_36hr variant.
+              Clearance is stored separately from protocol. 24h and 36h are not in protocol on the live LoadLine path.
+              Meal window is 14:10. physicianClearedExtendedFasts is not flipped here.
             </p>
             <p className="font-mono text-[11px] text-muted-foreground">
               Variant on file: {detail.resetVariant === "extended_36hr" ? "extended_36hr" : "standard_24hr"}
-              {" · "}Day 1 of The Ninety: {formatDateShort(detail.startDate)}
-              {" · "}Program ends {formatDateShort(pos.programEndDate)}
+              {" · "}LoadLine 30 Day 1: {formatDateShort(detail.startDate)}
+              {" · "}LoadLine 365 window ends {formatDateShort(pos.programEndDate)}
             </p>
           </CardContent>
         </Card>
@@ -235,7 +224,7 @@ export default async function ClientDetailPage({ params }: { params: { clientId:
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Band Calibration</CardTitle>
-            <CardDescription>Day 1 of The Ninety baseline — re-calibrate at Day 31, 61</CardDescription>
+            <CardDescription>Day 1 LoadLine 30 baseline — band calibration</CardDescription>
           </CardHeader>
           <CardContent>
             <BandCalibrationPanel clientId={detail.id} calibration={detail.bandCalibration} />

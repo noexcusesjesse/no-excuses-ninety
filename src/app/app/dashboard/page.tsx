@@ -1,55 +1,42 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Stat, MoodPicker } from "@/app/client/_components";
-import { FastingCard } from "@/app/client/fasting-card";
-import { getClientToday, type WorkoutLetter } from "@/db/queries";
-import { getMealTheme } from "@/lib/meal-themes";
+import { MealWindowCard } from "@/app/client/meal-window-card";
+import { getClientToday } from "@/db/queries";
 import {
+  HOME_ENVIRONMENTS,
+  LOADLINE_30_WEEK,
+  LOADLINE_FORMULA,
+  SAFETY_LINE,
   blockLabel,
   formatPositionKicker,
   formatPositionSecondary,
   journeyProgress,
-  mealThemeDayIndex,
+  type HomeEnvironment,
 } from "@/lib/program-position";
-import { Beef, Check, Circle, Dumbbell, Droplet, Footprints, Moon } from "lucide-react";
+import { Beef, Check, Droplet, Footprints, Moon } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-const WORKOUT_A = [
-  { name: "Sit-to-stand / squat", reps: "8–12", band: "bodyweight → medium" },
-  { name: "Door-anchor chest press", reps: "10–12", band: "light" },
-  { name: "Door-anchor row", reps: "10–12", band: "medium" },
-  { name: "Glute bridge", reps: "10–15", band: "bodyweight → light/medium" },
-  { name: "Face pull or pull-apart", reps: "12–15", band: "light" },
-  { name: "Dead bug", reps: "6–8/side", band: "no band / lightest" },
-];
-const WORKOUT_B = [
-  { name: "Sit-to-stand", reps: "8–12", band: "bodyweight → medium" },
-  { name: "Band Romanian deadlift", reps: "10–12", band: "medium or heavy" },
-  { name: "Ankle-strap kickback", reps: "10/side", band: "light" },
-  { name: "Incline or knee push-up", reps: "6–12", band: "no band" },
-  { name: "Door-anchor face pull", reps: "12–15", band: "light" },
-  { name: "Bird-dog", reps: "6–8/side", band: "no band" },
-];
-function getWorkout(letter: WorkoutLetter) { return letter === "A" ? WORKOUT_A : letter === "B" ? WORKOUT_B : []; }
+const ENV_ORDER: HomeEnvironment[] = ["foundation", "strength", "condition", "recovery"];
 
 export default async function DashboardPage() {
   const client = await getClientToday();
   if (!client) return <div className="py-12 text-center text-muted-foreground">Not signed in as a client.</div>;
 
-  const exercises = getWorkout(client.plan.workout);
-  const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const weekDone = [true, true, true, true, false, false];
-  const theme = getMealTheme(mealThemeDayIndex(client.position));
   const pos = client.position;
   const journey = journeyProgress(pos);
   const secondary = formatPositionSecondary(pos);
   const blockTitle = blockLabel(pos.block);
-  const metaLine =
-    pos.block === "basicTraining" ? `Day ${pos.dayInBlock}/${pos.daysInBlock}`
-    : pos.block === "ninety" ? `Wk ${pos.ninetyWeek}/13`
-    : pos.programMonth ? `Month ${pos.programMonth}/15`
-    : null;
+  const isLoadLine30 = pos.block === "loadLine30";
+  const isBootCamp = pos.block === "bootCamp";
+  const todayEnv = client.plan.environment;
+  const envMeta = HOME_ENVIRONMENTS[todayEnv];
+  const metaLine = isBootCamp
+    ? `Day ${pos.dayInBlock}/${pos.daysInBlock}`
+    : isLoadLine30
+      ? `Day ${pos.dayInBlock} of 30`
+      : null;
 
   return (
     <>
@@ -67,7 +54,7 @@ export default async function DashboardPage() {
             )}
           </div>
           <div className="hidden text-right sm:block">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Block</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Product</p>
             <p className="text-sm font-semibold">
               {blockTitle}
               {metaLine && (
@@ -76,9 +63,11 @@ export default async function DashboardPage() {
             </p>
           </div>
         </div>
+        <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
+          {LOADLINE_FORMULA}
+        </p>
       </section>
 
-      {/* Journey ring — 15-month Reset, not a 90-day-only identity */}
       <Card className="mb-6">
         <CardContent className="flex items-center gap-6 pt-6">
           <div className="relative flex h-24 w-24 shrink-0 items-center justify-center">
@@ -98,13 +87,17 @@ export default async function DashboardPage() {
           </div>
           <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
-              <p className="font-mono text-[10px] uppercase text-muted-foreground">Block</p>
+              <p className="font-mono text-[10px] uppercase text-muted-foreground">Product</p>
               <p className="text-sm font-semibold leading-tight">{blockTitle}</p>
             </div>
             <div>
-              <p className="font-mono text-[10px] uppercase text-muted-foreground">Month</p>
+              <p className="font-mono text-[10px] uppercase text-muted-foreground">Today</p>
               <p className="font-mono text-lg font-semibold tabular-nums">
-                {pos.programMonth ? `${pos.programMonth}/15` : "Pre-Day 1"}
+                {isLoadLine30
+                  ? `${pos.dayInBlock}/30`
+                  : isBootCamp
+                    ? `${pos.dayInBlock}/14`
+                    : blockTitle}
               </p>
             </div>
             <div>
@@ -119,54 +112,96 @@ export default async function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Today card with meal theme */}
-      <div className="mb-6 flex items-center gap-2">
-        <span className="rounded-full bg-primary/15 px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-primary">
-          {theme.name}
-        </span>
-        <span className="text-xs text-muted-foreground">{theme.description}</span>
-      </div>
-
       <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat icon={Beef} label="Protein" value={client.proteinToday} target={client.proteinTarget} unit="g" />
         <Stat icon={Droplet} label="Hydration" value={client.hydrationOz} target={client.hydrationTarget} unit=" oz" />
-        <Stat icon={Footprints} label="Steps" value={client.stepsToday} target={client.stepsTarget} unit="" />
+        <Stat icon={Footprints} label="Walk" value={client.plan.walkMinutes} target={client.plan.walkMinutes} unit=" min" />
         <Stat icon={Moon} label="Sleep" value={client.sleepHours} target={8} unit="h" />
       </section>
 
       <section className="mb-6 grid gap-4 sm:grid-cols-2">
-        <FastingCard />
+        <MealWindowCard />
+        <Card>
+          <CardHeader>
+            <CardTitle>If something feels off</CardTitle>
+            <CardDescription>Not medical advice.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm leading-relaxed">{SAFETY_LINE}</p>
+          </CardContent>
+        </Card>
       </section>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>HOME · {envMeta.label}</CardTitle>
+          <CardDescription>
+            Four environments as HOME labels — not facility pods. {envMeta.hint}.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {ENV_ORDER.map((key) => {
+              const env = HOME_ENVIRONMENTS[key];
+              const active = key === todayEnv;
+              return (
+                <div
+                  key={key}
+                  className={`rounded-md border px-3 py-2 ${
+                    active ? "border-primary bg-primary/10" : "border-border bg-card"
+                  }`}
+                >
+                  <p className="text-sm font-semibold">{env.label}</p>
+                  <p className="mt-0.5 font-mono text-[10px] leading-snug text-muted-foreground">{env.hint}</p>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="mb-6 overflow-hidden">
         <CardHeader className="border-b border-border bg-gradient-to-r from-primary/15 via-primary/5 to-transparent">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <CardTitle>Today · Workout {client.plan.workout}</CardTitle>
+              <CardTitle>
+                {isBootCamp
+                  ? "Boot Camp analog"
+                  : isLoadLine30 && client.plan.isDay1Calibration
+                    ? "Day 1 · Band calibration + Foundation + walk"
+                    : `Today · ${envMeta.label}`}
+              </CardTitle>
               <CardDescription className="mt-1">
-                {pos.block === "basicTraining"
-                  ? "Habit loop — show up. Walk, protein, sleep. No extended fasts."
-                  : client.plan.isDeload ? "Deload week — 1 round, lightest bands" : "2 rounds · rest 45–75s between sets"}
+                {isBootCamp
+                  ? "Already done. Not Basic Training. Not Base Camp. LoadLine 30 starts Sep 1."
+                  : client.plan.extra || envMeta.hint}
               </CardDescription>
             </div>
-            <Button size="lg" className="shadow-glow"><Dumbbell className="h-4 w-4" />Start workout</Button>
+            {!isBootCamp && (
+              <Button size="lg" className="shadow-glow shrink-0">Start {envMeta.label}</Button>
+            )}
           </div>
         </CardHeader>
-        <CardContent className="p-0">
-          <ol className="divide-y divide-border">
-            {exercises.map((ex, i) => (
-              <li key={ex.name} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-accent/40">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border font-mono text-[10px] text-muted-foreground">{i + 1}</span>
-                <div className="flex-1">
-                  <p className="text-sm font-medium leading-tight">{ex.name}</p>
-                  <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{ex.reps} reps · {ex.band}</p>
-                </div>
-                <button className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" aria-label="Mark complete">
-                  <Circle className="h-5 w-5" />
-                </button>
-              </li>
-            ))}
-          </ol>
+        <CardContent className="space-y-3 p-5">
+          {isBootCamp ? (
+            <p className="text-sm text-muted-foreground">
+              Aug 18–31 was the Boot Camp analog. Tomorrow is LoadLine 30 Day 1 — Foundation + walk, not a hero Strength session.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm">
+                <span className="font-medium">{envMeta.label}.</span>{" "}
+                {envMeta.hint}. {client.plan.walkNote}.
+                {client.plan.stretchMinutes > 0 ? ` ${client.plan.stretchMinutes} min stretch.` : ""}
+                {client.plan.isWeighIn ? " Sunday weigh-in (weight/waist)." : ""}
+              </p>
+              {client.plan.isDay1Calibration && (
+                <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+                  Band calibration, then Foundation + walk. Not a hero Strength session.
+                </p>
+              )}
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -174,16 +209,14 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Today&apos;s walk</CardTitle>
-            <CardDescription>
-              {client.plan.isFastedWalk ? "60-min fasted walk — break fast with protein on return" : `${client.plan.walkMinutes}-min outdoor walk`}
-            </CardDescription>
+            <CardDescription>{client.plan.walkNote}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-primary"><Footprints className="h-5 w-5" /></div>
               <div className="flex-1">
-                <p className="font-mono text-2xl font-semibold tabular-nums">{client.stepsToday.toLocaleString()}</p>
-                <p className="font-mono text-[11px] text-muted-foreground">of {client.stepsTarget.toLocaleString()} target</p>
+                <p className="font-mono text-2xl font-semibold tabular-nums">{client.plan.walkMinutes} min</p>
+                <p className="font-mono text-[11px] text-muted-foreground">{client.plan.walkNote}</p>
               </div>
               <Button variant="outline">Log</Button>
             </div>
@@ -214,10 +247,6 @@ export default async function DashboardPage() {
                 ))}
               </div>
             </div>
-            <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground"><Moon className="h-3.5 w-3.5" />CPAP last night</div>
-              <span className="font-mono text-sm tabular-nums">{client.cpapHours}h</span>
-            </div>
           </CardContent>
         </Card>
       </section>
@@ -226,25 +255,31 @@ export default async function DashboardPage() {
         <CardHeader>
           <CardTitle>This week</CardTitle>
           <CardDescription>
-            {pos.block === "ninety" && pos.ninetyWeek
-              ? `The Ninety · Wk ${pos.ninetyWeek} of 13`
-              : pos.block === "basicTraining"
-                ? "Basic Training · 14-day runway"
-                : pos.programMonth
-                  ? `${blockTitle} · Month ${pos.programMonth} of 15`
-                  : blockTitle}
+            {isLoadLine30
+              ? "LoadLine 30 week shape — signed packet, not a 365-day calendar"
+              : isBootCamp
+                ? "Boot Camp analog · LoadLine 30 week shape starts Sep 1"
+                : `${blockTitle} · weekday shape from LoadLine 30`}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
-            {weekDays.map((d, i) => (
-              <div key={d} className="flex flex-col items-center gap-1 rounded-md border border-border bg-card p-2">
-                <span className="font-mono text-[10px] uppercase text-muted-foreground">{d}</span>
-                <div className={`h-5 w-5 rounded-full ${weekDone[i] ? "bg-success" : "bg-muted"} flex items-center justify-center`}>
-                  {weekDone[i] && <Check className="h-3 w-3 text-success-foreground" />}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+            {LOADLINE_30_WEEK.map((d) => {
+              const isToday = d.dayLabel === client.plan.dayLabel;
+              return (
+                <div
+                  key={d.dayLabel}
+                  className={`flex flex-col gap-1 rounded-md border p-2 ${
+                    isToday ? "border-primary bg-primary/10" : "border-border bg-card"
+                  }`}
+                >
+                  <span className="font-mono text-[10px] uppercase text-muted-foreground">{d.dayLabel}</span>
+                  <span className="text-xs font-semibold">{HOME_ENVIRONMENTS[d.environment].label}</span>
+                  <span className="font-mono text-[10px] leading-snug text-muted-foreground">{d.walkNote}</span>
+                  {isToday && <Check className="h-3 w-3 text-primary" />}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>
