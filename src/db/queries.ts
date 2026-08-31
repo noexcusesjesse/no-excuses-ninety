@@ -12,6 +12,16 @@ import { db, schema, first } from "./client";
 import { and, eq, desc, gte } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import {
+  formValuesFromRows,
+  mapFormToPatches,
+  planCheckinUpsert,
+  planWeightUpsert,
+  type DailyLogFormInput,
+  type ExistingCheckin,
+  type ExistingWeight,
+  type TodayLogFormValues,
+} from "@/lib/daily-log";
+import {
   addDays,
   blockLabel,
   coachProgramSnapshot,
@@ -722,6 +732,135 @@ export async function getWeightHistory(): Promise<WeightEntry[]> {
     weightLb: r.weightLb,
     waistIn: r.waistIn ?? null,
   }));
+}
+
+// ============================================================================
+// CLIENT DAILY LOG — POST /api/log (do not clobber fasting timer fields)
+// ============================================================================
+
+function asExistingCheckin(row: typeof schema.dailyCheckins.$inferSelect): ExistingCheckin {
+  return {
+    id: row.id,
+    clientId: row.clientId,
+    date: row.date,
+    workoutDone: row.workoutDone,
+    walkMinutes: row.walkMinutes,
+    steps: row.steps,
+    proteinG: row.proteinG,
+    hydrationOz: row.hydrationOz,
+    mood: row.mood,
+    energy: row.energy,
+    sleepHours: row.sleepHours,
+    cpapHours: row.cpapHours,
+    notes: row.notes,
+    fastType: row.fastType,
+    fastStartMs: row.fastStartMs,
+    fastEndMs: row.fastEndMs,
+    fastDurationMs: row.fastDurationMs,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+export async function getTodayLogFormValues(): Promise<TodayLogFormValues | null> {
+  const session = await getSession();
+  if (!session.userId || session.role !== "client") return null;
+  return loadTodayLogFormValues(session.userId);
+}
+
+async function loadTodayLogFormValues(clientId: string): Promise<TodayLogFormValues> {
+  const today = todayISODate();
+  const checkin = first(
+    await db.select().from(schema.dailyCheckins)
+      .where(and(eq(schema.dailyCheckins.clientId, clientId), eq(schema.dailyCheckins.date, today)))
+      .limit(1),
+  );
+  const weight = first(
+    await db.select().from(schema.weights)
+      .where(and(eq(schema.weights.clientId, clientId), eq(schema.weights.date, today)))
+      .limit(1),
+  );
+  return formValuesFromRows(
+    today,
+    checkin ? asExistingCheckin(checkin) : null,
+    weight ? (weight as ExistingWeight) : null,
+  );
+}
+
+export async function upsertTodayLog(
+  clientId: string,
+  input: DailyLogFormInput,
+): Promise<{ date: string; checkinId: string }> {
+  const today = todayISODate();
+  const now = new Date();
+  const { checkin: checkinPatch, weight: weightPatch } = mapFormToPatches(input);
+
+  return db.transaction(async (tx) => {
+    const existingCheckin = first(
+      await tx.select().from(schema.dailyCheckins)
+        .where(and(eq(schema.dailyCheckins.clientId, clientId), eq(schema.dailyCheckins.date, today)))
+        .limit(1),
+    );
+    const plan = planCheckinUpsert(
+      existingCheckin ? asExistingCheckin(existingCheckin) : null,
+      checkinPatch,
+      { id: crypto.randomUUID(), clientId, date: today, now },
+    );
+
+    let checkinId: string;
+    if (plan.kind === "insert") {
+      const row = plan.row;
+      await tx.insert(schema.dailyCheckins).values({
+        id: row.id,
+        clientId: row.clientId,
+        date: row.date,
+        workoutDone: row.workoutDone,
+        walkMinutes: row.walkMinutes,
+        steps: row.steps,
+        proteinG: row.proteinG,
+        hydrationOz: row.hydrationOz,
+        mood: row.mood,
+        energy: row.energy,
+        sleepHours: row.sleepHours,
+        cpapHours: row.cpapHours,
+        notes: row.notes,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      });
+      checkinId = row.id;
+    } else {
+      await tx.update(schema.dailyCheckins)
+        .set(plan.set)
+        .where(eq(schema.dailyCheckins.id, plan.id));
+      checkinId = plan.id;
+    }
+
+    const existingWeight = first(
+      await tx.select().from(schema.weights)
+        .where(and(eq(schema.weights.clientId, clientId), eq(schema.weights.date, today)))
+        .limit(1),
+    );
+    const weightPlan = planWeightUpsert(
+      existingWeight ? (existingWeight as ExistingWeight) : null,
+      weightPatch,
+      { id: crypto.randomUUID(), clientId, date: today },
+    );
+    if (weightPlan.kind === "insert") {
+      await tx.insert(schema.weights).values({
+        id: weightPlan.row.id,
+        clientId: weightPlan.row.clientId,
+        date: weightPlan.row.date,
+        weightLb: weightPlan.row.weightLb,
+        waistIn: weightPlan.row.waistIn,
+      });
+    } else if (weightPlan.kind === "update") {
+      await tx.update(schema.weights)
+        .set(weightPlan.set)
+        .where(eq(schema.weights.id, weightPlan.id));
+    }
+
+    return { date: today, checkinId };
+  });
 }
 
 // ============================================================================

@@ -1,4 +1,4 @@
-import { getClientToday, getClientProfile } from "@/db/queries";
+import { getClientToday, getClientProfile, getTodayLogFormValues } from "@/db/queries";
 import { getMealTheme } from "@/lib/meal-themes";
 import { formatPositionKicker, formatPositionSecondary, mealThemeDayIndex } from "@/lib/program-position";
 import { LogForm } from "./log-form";
@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function LogPage() {
   const client = await getClientToday();
   const profile = await getClientProfile();
+  const initial = await getTodayLogFormValues();
   if (!client || !profile) return <div className="py-12 text-center text-muted-foreground">Not signed in as a client.</div>;
 
   const theme = getMealTheme(mealThemeDayIndex(client.position));
@@ -33,7 +34,7 @@ export default async function LogPage() {
         <span className="text-xs text-muted-foreground">{theme.description}</span>
       </div>
 
-      <LogForm theme={theme} />
+      <LogForm theme={theme} initial={initial ?? undefined} />
     </>
   );
 }
