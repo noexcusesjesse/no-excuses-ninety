@@ -92,7 +92,6 @@ assert.equal(aug18.dayInBlock, 1);
 const aug31 = getProgramPosition(START, "2026-08-31");
 assert.equal(aug31.block, "bootCamp");
 assert.equal(aug31.dayInBlock, 14);
-assert.equal(aug31.block === "loadLine30", false);
 assert.notEqual(blockLabel(aug31.block), "The Ninety");
 assert.equal(formatPositionKicker(aug31, "Mon"), "Mon · Boot Camp · Day 14 of 14");
 assert.equal(formatPositionSecondary(aug31), "LoadLine 30 starts Sep 1, 2026");

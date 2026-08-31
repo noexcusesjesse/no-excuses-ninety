@@ -54,24 +54,21 @@ function allows36h(settings: FastingSettings, position: ProgramPosition): boolea
   );
 }
 
-function allows24h(settings: FastingSettings, position: ProgramPosition): boolean {
-  return (
-    settings.physicianClearedExtendedFasts &&
-    position.extendedFast24hEligibleByMonth
-  );
-}
-
 /**
  * Resolve a date's meal-window type.
  *
  * Live LoadLine path: 14:10. Never 24h, never 36h.
  */
 export function getDayType(
-  _date: Date,
-  _settings: FastingSettings,
-  _preRamp: PreRamp | null,
-  _position: ProgramPosition,
+  date: Date,
+  settings: FastingSettings,
+  preRamp: PreRamp | null,
+  position: ProgramPosition,
 ): FastType {
+  void date;
+  void settings;
+  void preRamp;
+  void position;
   return "pre_14_10";
 }
 

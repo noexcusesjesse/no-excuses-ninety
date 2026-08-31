@@ -1,7 +1,7 @@
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Stat, MoodPicker } from "./_components";
+import { Stat } from "./_components";
 import { MealWindowCard } from "./meal-window-card";
 import { getClientToday } from "@/db/queries";
 import {

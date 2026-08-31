@@ -226,7 +226,8 @@ function emptyGates() {
   };
 }
 
-export function isOvernightOnlyBlock(_block: ProgramBlock): boolean {
+export function isOvernightOnlyBlock(block: ProgramBlock): boolean {
+  void block;
   return true;
 }
 
@@ -379,9 +380,11 @@ export type Day90InterviewStatus = "not_yet" | "upcoming" | "due";
 
 /** The Ninety is not the live path. No Day 90 interview clock. */
 export function day90InterviewStatus(
-  _position: ProgramPosition,
-  _upcomingWindowDays = 7,
+  position: ProgramPosition,
+  upcomingWindowDays = 7,
 ): Day90InterviewStatus {
+  void position;
+  void upcomingWindowDays;
   return "not_yet";
 }
 
