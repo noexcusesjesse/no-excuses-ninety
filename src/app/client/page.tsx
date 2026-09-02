@@ -80,8 +80,11 @@ export default async function ClientDashboardPage() {
           <Stat icon={Moon} label="Sleep" value={client.sleepHours} target={8} unit="h" />
         </section>
 
-        <section className="mb-6 grid gap-4 sm:grid-cols-2">
+        <section className="mb-6">
           <MealWindowCard />
+        </section>
+
+        <section className="mb-6">
           <Card>
             <CardHeader>
               <CardTitle>If something feels off</CardTitle>
